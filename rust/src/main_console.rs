@@ -17,50 +17,6 @@ use hearts_ai::ChooseCardStrategy;
 // pass cards
 // match with multiple rounds to 100 points
 
-fn run_ai_simulation() {
-    let mut deck = Deck::new();
-    let mut rng = thread_rng();
-    // let mut deck_rng: StdRng = SeedableRng::seed_from_u64(42);
-
-    let mut total_points: Vec<i64> = Vec::new();
-    total_points.resize(4, 0);
-
-    for _ in 0..1000000 {
-        deck.shuffle(&mut rng);
-        let mut round = hearts::Round::deal(&deck, hearts::RuleSet::default());
-        for i in 0..round.players.len() {
-            println!("P{}: {}", i, all_suit_groups(&round.players[i].hand));
-        }
-        let strategies = vec![
-            ChooseCardStrategy::AvoidPoints,
-            ChooseCardStrategy::MonteCarloMixedRandomAvoidPoints(
-                0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
-            ChooseCardStrategy::MonteCarloRandom(
-                MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
-            ChooseCardStrategy::MonteCarloMixedRandomAvoidPoints(
-                0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
-        ];
-
-        while !round.is_over() {
-            let card_to_play = hearts_ai::choose_card(
-                &hearts_ai::ChooseCardRequest::from_round(&round),
-                &strategies[round.current_player_index()], &mut rng);
-            println!("P{} plays {}", round.current_player_index(), card_to_play.symbol_string());
-            round.play_card(&card_to_play).expect("");
-            if round.current_trick.cards.is_empty() {
-                let t = round.prev_tricks.last().expect("");
-                println!("P{} takes the trick", t.winner);
-            }
-        }
-        let points = round.points_taken();
-        println!("Score: {:?}", points);
-        for (j, p) in points.iter().enumerate() {
-            total_points[j] += *p as  i64;
-        }
-        println!("Total: {:?}\n", total_points);
-    }
-}
-
 fn main() {
     let mut deck = Deck::new();
     let mut rng = thread_rng();

@@ -6,3 +6,16 @@ edition = "2018"
 
 [dependencies]
 rand = "0.6.5"
+serde_json = "1.0"
+
+[[bin]]
+name = "hearts_console"
+path = "src/main_console.rs"
+
+[[bin]]
+name = "hearts_ai_rounds"
+path = "src/main_ai_rounds.rs"
+
+[[bin]]
+name = "hearts_json"
+path = "src/main_json.rs"
