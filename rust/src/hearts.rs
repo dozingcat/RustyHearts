@@ -1,0 +1,372 @@
+use crate::card::*;
+
+pub const QUEEN_OF_SPADES: Card = Card {rank: Rank::QUEEN, suit: Suit::Spades};
+pub const TWO_OF_CLUBS: Card = Card {rank: Rank::TWO, suit: Suit::Clubs};
+pub const JACK_OF_DIAMONDS: Card = Card {rank: Rank::JACK, suit: Suit::Diamonds};
+
+#[derive(Debug, Clone)]
+pub struct Player {
+    pub hand: Vec<Card>,
+    // TODO: passed/received cards? (maybe better separately)
+}
+
+impl Player {
+    pub fn new(hand: &[Card]) -> Player {
+        return Player {hand: hand.to_vec()};
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RuleSet {
+    pub num_players: usize,
+    pub removed_cards: Vec<Card>,
+    pub point_limit: u32,
+    pub points_on_first_trick: bool,
+    pub queen_breaks_hearts: bool,
+    pub jd_minus_10: bool,
+}
+
+impl RuleSet {
+    pub fn default() -> RuleSet {
+        return RuleSet {
+            num_players: 4,
+            removed_cards: Vec::new(),
+            point_limit: 100,
+            points_on_first_trick: false,
+            queen_breaks_hearts: false,
+            jd_minus_10: false,
+        };
+    }
+}
+
+pub fn points_for_card(c: &Card, rules: &RuleSet) -> i32 {
+    if c.suit == Suit::Hearts {
+        return 1;
+    }
+    else if c.rank == Rank::QUEEN && c.suit == Suit::Spades {
+        return 13;
+    }
+    else if rules.jd_minus_10 && c.rank == Rank::JACK && c.suit == Suit::Diamonds {
+        return -10;
+    }
+    return 0;
+}
+
+pub fn points_for_cards(cards: &[Card], rules: &RuleSet) -> i32 {
+    let mut points = 0;
+    for &c in cards.iter() {
+        points += points_for_card(&c, rules);
+    }
+    return points;
+}
+
+pub fn highest_in_trick(cards: &[Card]) -> &Card {
+    let suit = cards[0].suit;
+    return cards.iter().filter(|c| c.suit == suit).max_by(|a, b| a.rank.cmp(&b.rank)).unwrap();
+}
+
+#[derive(Debug, Clone)]
+pub struct Trick {
+    pub leader: usize,
+    pub cards: Vec<Card>,
+    pub winner: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct TrickInProgress {
+    pub leader: usize,
+    pub cards: Vec<Card>,
+}
+
+impl TrickInProgress {
+    pub fn new(leader: usize) -> TrickInProgress {
+        return TrickInProgress {leader: leader, cards: Vec::new()};
+    }
+}
+
+fn find_card(players: &[Player], target: &Card) -> usize {
+    for (i, p) in players.iter().enumerate() {
+        for c in p.hand.iter() {
+            if c == target {
+                return i;
+            }
+        }
+    }
+    panic!("Didn't find {}", target.symbol_string());
+}
+
+#[derive(Debug, Clone)]
+pub struct Round {
+    pub rules: RuleSet,
+    pub players: Vec<Player>,
+    pub current_trick: TrickInProgress,
+    pub prev_tricks: Vec<Trick>,
+}
+
+impl Round {
+    pub fn deal(deck: &Deck, rules: RuleSet) -> Round {
+        let mut players: Vec<Player> = Vec::new();
+        // TODO: Don't hardcode to 4 players and 13 cards.
+        for i in 0..4 {
+            let start = 13 * i;
+            let end = 13 * (i + 1);
+            players.push(Player::new(&deck.cards[start..end]));
+        }
+        let current_player_index = find_card(&players, &TWO_OF_CLUBS);
+        return Round {
+            rules: rules,
+            players: players,
+            current_trick: TrickInProgress::new(current_player_index),
+            prev_tricks: Vec::new(),
+        };
+    }
+
+    pub fn is_over(&self) -> bool {
+        return self.players.iter().all(|p| p.hand.is_empty());
+    }
+
+    pub fn points_taken(&self) -> Vec<i32> {
+        let mut points: Vec<i32> = Vec::new();
+        points.resize(self.players.len(), 0);
+        for t in self.prev_tricks.iter() {
+            points[t.winner as usize] += points_for_cards(&t.cards, &self.rules);
+        }
+        return points;
+    }
+
+    pub fn legal_plays(&self) -> Vec<Card> {
+        return legal_plays(
+            &self.current_player().hand,
+            &self.current_trick,
+            &self.prev_tricks,
+            &self.rules);
+    }
+
+    pub fn are_hearts_broken(&self) -> bool {
+        return are_hearts_broken(&self.current_trick, &self.prev_tricks, &self.rules);
+    }
+
+    pub fn play_card(&mut self, card: &Card) -> Result<(), ()> {
+        let pos = self.current_player().hand.iter().position(|&c| c == *card);
+        if let Some(index) = pos {
+            self.current_player_mut().hand.remove(index);
+            self.current_trick.cards.push(*card);
+            if self.current_trick.cards.len() == self.players.len() {
+                let winner_index = trick_winner_index(&self.current_trick.cards);
+                let winner =
+                    (self.current_trick.leader + winner_index) % self.players.len();
+                self.prev_tricks.push(Trick {
+                    leader: self.current_trick.leader,
+                    cards: self.current_trick.cards.clone(),
+                    winner: winner,
+                });
+                self.current_trick = TrickInProgress::new(winner);
+            }
+            return Ok(());
+        }
+        else {
+            return Err(());
+        }
+    }
+
+    pub fn current_player_index(&self) -> usize {
+        let ct = &self.current_trick;
+        return (ct.leader + ct.cards.len()) % self.rules.num_players;
+    }
+
+    pub fn current_player(&self) -> &Player {
+        return &self.players[self.current_player_index()];
+    }
+
+    fn current_player_mut(&mut self) -> &mut Player {
+        let index = self.current_player_index();
+        return &mut self.players[index];
+    }
+}
+
+fn are_hearts_broken(
+    current_trick: &TrickInProgress, prev_tricks: &[Trick], rules: &RuleSet) -> bool {
+    let qb = rules.queen_breaks_hearts;
+    for t in prev_tricks.iter() {
+        for &c in t.cards.iter() {
+            if c.suit == Suit::Hearts || (qb && c == QUEEN_OF_SPADES) {
+                return true;
+            }
+        }
+    }
+    for &c in current_trick.cards.iter() {
+        if c.suit == Suit::Hearts || (qb && c == QUEEN_OF_SPADES) {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn points_taken(tricks: &[Trick], rules: &RuleSet) -> Vec<i32> {
+    let mut points: Vec<i32> = Vec::new();
+    points.resize(rules.num_players, 0);
+    for t in tricks.iter() {
+        points[t.winner as usize] += points_for_cards(&t.cards, rules);
+    }
+    return points;
+}
+
+pub fn legal_plays(hand: &[Card],
+                   current_trick: &TrickInProgress,
+                   prev_tricks: &[Trick],
+                   rules: &RuleSet) -> Vec<Card> {
+    if prev_tricks.is_empty() {
+        // First trick.
+        if current_trick.cards.is_empty() {
+            // First play must be 2C.
+            if hand.contains(&TWO_OF_CLUBS) {
+                return vec![TWO_OF_CLUBS];
+            }
+            return Vec::new();
+        }
+        else {
+            // Follow suit if possible.
+            let lead = current_trick.cards[0].suit;
+            let suit_matches: Vec<Card> = hand.iter().filter(|c| c.suit == lead).cloned().collect();
+            if !suit_matches.is_empty() {
+                return suit_matches;
+            }
+            else {
+                // No points unless rule is set.
+                if !rules.points_on_first_trick {
+                    let non_points: Vec<Card> =
+                        hand.iter().filter(|c| points_for_card(c, rules) <= 0).cloned().collect();
+                    if !non_points.is_empty() {
+                        return non_points;
+                    }
+                }
+                // Either points are allowed or we have nothing but points.
+                return hand.to_vec();
+            }
+        }
+    }
+    if current_trick.cards.is_empty() {
+        // Leading a new trick; remove hearts unless hearts are broken or there's no choice.
+        if !are_hearts_broken(current_trick, prev_tricks, rules) {
+            let non_hearts: Vec<Card> =
+                hand.iter().filter(|c| c.suit != Suit::Hearts).cloned().collect();
+            if !non_hearts.is_empty() {
+                return non_hearts;
+            }
+        }
+        return hand.to_vec();
+    }
+    else {
+        // Follow suit if possible; otherwise play anything.
+        let lead = current_trick.cards[0].suit;
+        let suit_matches: Vec<Card> = hand.iter().filter(|c| c.suit == lead).cloned().collect();
+        return if suit_matches.is_empty() {hand.to_vec()} else {suit_matches};
+    }
+}
+
+fn trick_winner_index(cards: &[Card]) -> usize {
+    let mut best_index: usize = 0;
+    let mut best_rank = cards[0].rank;
+    for i in 1..cards.len() {
+        if cards[i].suit == cards[0].suit && cards[i].rank > best_rank {
+            best_index = i;
+            best_rank = cards[i].rank;
+        }
+    }
+    return best_index;
+}
+
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn c(s: &str) -> Vec<Card> {cards_from_str(s)}
+
+    #[test]
+    fn test_possible_leads() {
+        let rules = RuleSet::default();
+        let hand = c("AS QH 4C");
+        let cur_trick = TrickInProgress::new(0);
+
+        let prev_tricks_no_hearts = vec![Trick {
+            leader: 0,
+            cards: c("8S 7S 6S 5S"),
+            winner: 0,
+        }];
+        assert_eq!(legal_plays(&hand, &cur_trick, &prev_tricks_no_hearts, &rules), c("AS 4C"));
+
+        let prev_tricks_hearts = vec![Trick {
+            leader: 0,
+            cards: c("8S 7S KH 5S"),
+            winner: 0,
+        }];
+        assert_eq!(legal_plays(&hand, &cur_trick, &prev_tricks_hearts, &rules), c("AS QH 4C"));
+    }
+
+    #[test]
+    fn test_possible_follows() {
+        let rules = RuleSet::default();
+        let hand = c("AS 2S QH 4C");
+        // Need a previous trick to not trigger the "no points on first trick" rule.
+        let prev_tricks = vec![Trick {
+            leader: 0,
+            cards: c("2C JC QC KC"),
+            winner: 3,
+        }];
+
+        let spade_lead = TrickInProgress {leader: 0, cards: c("3S KH")};
+        assert_eq!(legal_plays(&hand, &spade_lead, &prev_tricks, &rules), c("AS 2S"));
+
+        let diamond_lead = TrickInProgress {leader: 0, cards: c("3D KH")};
+        assert_eq!(legal_plays(&hand, &diamond_lead, &prev_tricks, &rules), c("AS 2S QH 4C"));
+    }
+
+    #[test]
+    fn test_first_trick_2c_lead() {
+        let rules = RuleSet::default();
+        let hand = c("AS 2S QH 3C 2C");
+        let cur_trick = TrickInProgress::new(0);
+
+        assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("2C"));
+    }
+
+    #[test]
+    fn test_first_trick_follow() {
+        let rules = RuleSet::default();
+        let hand = c("AS 2S AC QH 3C");
+        let cur_trick = TrickInProgress {leader: 0, cards: c("2C JC")};
+
+        assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("AC 3C"));
+    }
+
+    #[test]
+    fn test_first_trick_no_points() {
+        let mut rules = RuleSet::default();
+        let hand = c("AS QS 7S 7H 7D");
+        let cur_trick = TrickInProgress {leader: 0, cards: c("2C JC")};
+
+        assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("AS 7S 7D"));
+
+        rules.points_on_first_trick = true;
+        assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("AS QS 7S 7H 7D"));
+    }
+
+    #[test]
+    fn test_first_trick_only_points() {
+        let mut rules = RuleSet::default();
+        let hand = c("AH TH QS 7H");
+        let cur_trick = TrickInProgress {leader: 0, cards: c("2C JC")};
+
+        assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("AH TH QS 7H"));
+    }
+
+    #[test]
+    fn test_trick_winner() {
+        assert_eq!(trick_winner_index(&c("9D 8D 7D 6D")), 0);
+        assert_eq!(trick_winner_index(&c("9D TD JD QD")), 3);
+        assert_eq!(trick_winner_index(&c("9D TD JD QS")), 2);
+        assert_eq!(trick_winner_index(&c("9D TD JC QS")), 1);
+        assert_eq!(trick_winner_index(&c("9D TH JC QS")), 0);
+    }
+}
