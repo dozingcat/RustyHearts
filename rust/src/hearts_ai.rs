@@ -11,7 +11,7 @@ pub struct MonteCarloParams {
     pub rollouts_per_hand: i32,
 }
 
-pub enum ChooseCardStrategy {
+pub enum CardToPlayStrategy {
     Random,
     AvoidPoints,
     MixedRandomAvoidPoints(f64),
@@ -20,7 +20,7 @@ pub enum ChooseCardStrategy {
     MonteCarloMixedRandomAvoidPoints(f64, MonteCarloParams),
 }
 
-pub struct ChooseCardRequest  {
+pub struct CardToPlayRequest  {
     pub rules: hearts::RuleSet,
     pub hand: Vec<Card>,
     pub prev_tricks: Vec<hearts::Trick>,
@@ -29,9 +29,9 @@ pub struct ChooseCardRequest  {
     // TODO: scores before this round (for match equity calculations)
 }
 
-impl ChooseCardRequest {
-    pub fn from_round(round: &hearts::Round) -> ChooseCardRequest {
-        return ChooseCardRequest {
+impl CardToPlayRequest {
+    pub fn from_round(round: &hearts::Round) -> CardToPlayRequest {
+        return CardToPlayRequest {
             rules: round.rules.clone(),
             hand: round.current_player().hand.clone(),
             prev_tricks: round.prev_tricks.clone(),
@@ -40,7 +40,8 @@ impl ChooseCardRequest {
     }
 
     pub fn current_player_index(&self) -> usize {
-        return (self.current_trick.leader + self.current_trick.cards.len()) % self.rules.num_players;
+        return
+            (self.current_trick.leader + self.current_trick.cards.len()) % self.rules.num_players;
     }
 
     pub fn legal_plays(&self) -> Vec<Card> {
@@ -48,21 +49,21 @@ impl ChooseCardRequest {
     }
 }
 
-fn is_nonrecursive(strategy: &ChooseCardStrategy) -> bool {
+fn is_nonrecursive(strategy: &CardToPlayStrategy) -> bool {
     return match strategy {
-        ChooseCardStrategy::Random => true,
-        ChooseCardStrategy::AvoidPoints => true,
-        ChooseCardStrategy::MixedRandomAvoidPoints(p_random) => true,
+        CardToPlayStrategy::Random => true,
+        CardToPlayStrategy::AvoidPoints => true,
+        CardToPlayStrategy::MixedRandomAvoidPoints(p_random) => true,
         _ => false,
     }
 }
 
 fn choose_card_nonrecursive(
-        req: &ChooseCardRequest, strategy: &ChooseCardStrategy, mut rng: impl Rng) -> Card {
+        req: &CardToPlayRequest, strategy: &CardToPlayStrategy, mut rng: impl Rng) -> Card {
     return match strategy {
-        ChooseCardStrategy::Random => choose_card_random(req, rng),
-        ChooseCardStrategy::AvoidPoints => choose_card_avoid_points(req, rng),
-        ChooseCardStrategy::MixedRandomAvoidPoints(p_random) =>
+        CardToPlayStrategy::Random => choose_card_random(req, rng),
+        CardToPlayStrategy::AvoidPoints => choose_card_avoid_points(req, rng),
+        CardToPlayStrategy::MixedRandomAvoidPoints(p_random) =>
             if rng.gen_range(0.0_f64, 1.0_f64) < *p_random
                 {choose_card_random(req, rng)}
             else
@@ -71,31 +72,32 @@ fn choose_card_nonrecursive(
     };
 }
 
-pub fn choose_card(req: &ChooseCardRequest, strategy: &ChooseCardStrategy, mut rng: impl Rng) -> Card {
+pub fn choose_card(
+        req: &CardToPlayRequest, strategy: &CardToPlayStrategy, mut rng: impl Rng) -> Card {
     if is_nonrecursive(strategy) {
         return choose_card_nonrecursive(req, strategy, &mut rng)
     }
     match strategy {
-        ChooseCardStrategy::MonteCarloRandom(mc_params) =>
-            choose_card_monte_carlo(req, *mc_params, &ChooseCardStrategy::Random, &mut rng),
+        CardToPlayStrategy::MonteCarloRandom(mc_params) =>
+            choose_card_monte_carlo(req, *mc_params, &CardToPlayStrategy::Random, &mut rng),
 
-        ChooseCardStrategy::MonteCarloAvoidPoints(mc_params) =>
-            choose_card_monte_carlo(req, *mc_params, &ChooseCardStrategy::AvoidPoints, &mut rng),
+        CardToPlayStrategy::MonteCarloAvoidPoints(mc_params) =>
+            choose_card_monte_carlo(req, *mc_params, &CardToPlayStrategy::AvoidPoints, &mut rng),
 
-        ChooseCardStrategy::MonteCarloMixedRandomAvoidPoints(p_rand, mc_params) =>
+        CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(p_rand, mc_params) =>
             choose_card_monte_carlo(
-                req, *mc_params, &ChooseCardStrategy::MixedRandomAvoidPoints(*p_rand), &mut rng),
+                req, *mc_params, &CardToPlayStrategy::MixedRandomAvoidPoints(*p_rand), &mut rng),
 
         _ => panic!("Unknown strategy"),
     }
 }
 
-pub fn choose_card_random(req: &ChooseCardRequest, mut rng: impl Rng) -> Card {
+pub fn choose_card_random(req: &CardToPlayRequest, mut rng: impl Rng) -> Card {
     let legal_plays = req.legal_plays();
     return *legal_plays.choose(&mut rng).unwrap();
 }
 
-pub fn choose_card_avoid_points(req: &ChooseCardRequest, mut rng: impl Rng) -> Card {
+pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> Card {
     let legal_plays = req.legal_plays();
     assert!(legal_plays.len() > 0);
     if legal_plays.len() == 1 {
@@ -192,7 +194,7 @@ pub fn choose_card_avoid_points(req: &ChooseCardRequest, mut rng: impl Rng) -> C
     }
 }
 
-fn do_rollout(round: &mut hearts::Round, strategy: &ChooseCardStrategy, mut rng: impl Rng) {
+fn do_rollout(round: &mut hearts::Round, strategy: &CardToPlayStrategy, mut rng: impl Rng) {
     /*
     println!("Rollout:");
     for (i, p) in round.players.iter().enumerate() {
@@ -211,7 +213,7 @@ fn do_rollout(round: &mut hearts::Round, strategy: &ChooseCardStrategy, mut rng:
         // We have to split the strategies into recursive and nonrecursive, otherwise the compiler
         // tries to infinitely recurse.
         let card_to_play = choose_card_nonrecursive(
-            &ChooseCardRequest::from_round(&round), strategy, &mut rng);
+            &CardToPlayRequest::from_round(&round), strategy, &mut rng);
         round.play_card(&card_to_play).expect("");
     }
 }
@@ -228,7 +230,7 @@ fn min_index<T: PartialOrd>(vals: &[T]) -> usize {
     return min_index;
 }
 
-fn make_card_distribution_req(req: &ChooseCardRequest) -> CardDistributionRequest {
+fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionRequest {
     let num_players = req.rules.num_players;
     let mut seen_cards: HashSet<Card> = HashSet::new();
     for &c in req.hand.iter() {
@@ -291,7 +293,7 @@ fn make_card_distribution_req(req: &ChooseCardRequest) -> CardDistributionReques
     };
 }
 
-fn possible_round(cc_req: &ChooseCardRequest, dist_req: &CardDistributionRequest,
+fn possible_round(cc_req: &CardToPlayRequest, dist_req: &CardDistributionRequest,
                   rng: impl Rng) -> Option<hearts::Round> {
     let maybe_dist = possible_card_distribution(&dist_req, rng);
     if maybe_dist.is_err() {
@@ -313,9 +315,9 @@ fn possible_round(cc_req: &ChooseCardRequest, dist_req: &CardDistributionRequest
 }
 
 pub fn choose_card_monte_carlo(
-        req: &ChooseCardRequest,
+        req: &CardToPlayRequest,
         mc_params: MonteCarloParams,
-        rollout_strategy: &ChooseCardStrategy,
+        rollout_strategy: &CardToPlayStrategy,
         mut rng: impl Rng) -> Card {
     let legal_plays = req.legal_plays();
     assert!(legal_plays.len() > 0);

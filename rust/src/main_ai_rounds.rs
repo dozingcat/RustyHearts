@@ -11,7 +11,7 @@ use rand::rngs::StdRng;
 
 use card::*;
 use hearts_ai::MonteCarloParams;
-use hearts_ai::ChooseCardStrategy;
+use hearts_ai::CardToPlayStrategy;
 
 // TODO:
 // pass cards
@@ -32,18 +32,18 @@ fn main() {
             println!("P{}: {}", i, all_suit_groups(&round.players[i].hand));
         }
         let strategies = vec![
-            ChooseCardStrategy::AvoidPoints,
-            ChooseCardStrategy::MonteCarloMixedRandomAvoidPoints(
+            CardToPlayStrategy::AvoidPoints,
+            CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
                 0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
-            ChooseCardStrategy::MonteCarloRandom(
+            CardToPlayStrategy::MonteCarloRandom(
                 MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
-            ChooseCardStrategy::MonteCarloMixedRandomAvoidPoints(
+            CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
                 0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
         ];
 
         while !round.is_over() {
             let card_to_play = hearts_ai::choose_card(
-                &hearts_ai::ChooseCardRequest::from_round(&round),
+                &hearts_ai::CardToPlayRequest::from_round(&round),
                 &strategies[round.current_player_index()], &mut rng);
             println!("P{} plays {}", round.current_player_index(), card_to_play.symbol_string());
             round.play_card(&card_to_play).expect("");

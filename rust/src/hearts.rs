@@ -264,7 +264,7 @@ pub fn legal_plays(hand: &[Card],
     }
 }
 
-fn trick_winner_index(cards: &[Card]) -> usize {
+pub fn trick_winner_index(cards: &[Card]) -> usize {
     let mut best_index: usize = 0;
     let mut best_rank = cards[0].rank;
     for i in 1..cards.len() {
@@ -281,7 +281,7 @@ fn trick_winner_index(cards: &[Card]) -> usize {
 mod test {
     use super::*;
 
-    fn c(s: &str) -> Vec<Card> {cards_from_str(s)}
+    fn c(s: &str) -> Vec<Card> {cards_from_str(s).unwrap()}
 
     #[test]
     fn test_possible_leads() {

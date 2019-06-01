@@ -11,7 +11,7 @@ use rand::rngs::StdRng;
 
 use card::*;
 use hearts_ai::MonteCarloParams;
-use hearts_ai::ChooseCardStrategy;
+use hearts_ai::CardToPlayStrategy;
 
 // TODO:
 // pass cards
@@ -20,7 +20,7 @@ use hearts_ai::ChooseCardStrategy;
 fn main() {
     let mut deck = Deck::new();
     let mut rng = thread_rng();
-    let ai_strat = ChooseCardStrategy::MonteCarloMixedRandomAvoidPoints(
+    let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
         0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
     deck.shuffle(&mut rng);
     let mut round = hearts::Round::deal(&deck, hearts::RuleSet::default());
@@ -38,7 +38,7 @@ fn main() {
 
     while !round.is_over() {
         let ai_card = hearts_ai::choose_card(
-            &hearts_ai::ChooseCardRequest::from_round(&round), &ai_strat, &mut rng);
+            &hearts_ai::CardToPlayRequest::from_round(&round), &ai_strat, &mut rng);
         if round.current_player_index() == 0 {
             println!("Choose a card (AI: {}): {}",
                 ai_card.symbol_string(), all_suit_groups(&round.players[0].hand));

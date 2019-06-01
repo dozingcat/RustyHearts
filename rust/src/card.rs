@@ -133,12 +133,12 @@ impl Card {
     }
 }
 
-pub fn cards_from_str(s: &str) -> Vec<Card> {
+pub fn cards_from_str(s: &str) -> Result<Vec<Card>, CardError> {
     let mut cards: Vec<Card> = Vec::new();
     for cs in s.split_whitespace() {
-        cards.push(Card::from(&cs).unwrap());
+        cards.push(Card::from(&cs)?);
     }
-    return cards;
+    return Ok(cards);
 }
 
 pub fn for_each_card(mut f: impl FnMut(&Card)) {
@@ -314,7 +314,7 @@ mod test {
 
     #[test]
     fn test_parse_multiple() {
-        let actual = cards_from_str(" 2C TD  AS\tQ♥\n ");
+        let actual = cards_from_str(" 2C TD  AS\tQ♥\n ").unwrap();
         let expected = vec![
             Card::new(Rank::num(2), Suit::Clubs),
             Card::new(Rank::num(10), Suit::Diamonds),
