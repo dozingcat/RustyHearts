@@ -3,8 +3,10 @@ mod hearts;
 mod hearts_ai;
 mod hearts_json;
 
+use std::ffi::CStr;
 use std::io;
 use std::io::Read;
+use std::slice;
 
 use rand::Rng;
 use rand::thread_rng;
@@ -30,4 +32,21 @@ fn main() {
         0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
     let ai_card = hearts_ai::choose_card(&req, &ai_strat, &mut rng);
     println!("{}", ai_card.symbol_string());
+}
+
+// Parses `len` bytes of `s` as a JSON-encoded CardToPlayRequest.
+#[no_mangle]
+pub extern fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
+    assert!(!s.is_null());
+    let bytes = unsafe {slice::from_raw_parts(s, len as usize)};
+    let r_str = String::from_utf8(bytes.to_vec()).unwrap();
+    let req = hearts_json::parse_card_to_play_request(&r_str).unwrap();
+    let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
+        0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
+    let mut rng = thread_rng();
+    let ai_card = hearts_ai::choose_card(&req, &ai_strat, &mut rng);
+    return match req.hand.iter().position(|&c| c == ai_card) {
+        Some(i) => i as i32,
+        None => -1,
+    };
 }
