@@ -7,13 +7,14 @@ use std::ffi::CStr;
 use std::io;
 use std::io::Read;
 use std::slice;
+use std::ptr;
 
 use rand::Rng;
 use rand::thread_rng;
 
 use card::*;
 use hearts_ai::MonteCarloParams;
-use hearts_ai::CardToPlayStrategy;
+use hearts_ai::{CardToPlayRequest, CardToPlayStrategy};
 
 /* Example: paste to stdin:
 {
@@ -34,13 +35,19 @@ fn main() {
     println!("{}", ai_card.symbol_string());
 }
 
-// Parses `len` bytes of `s` as a JSON-encoded CardToPlayRequest.
-#[no_mangle]
-pub extern fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
+unsafe fn card_to_play_req_from_json(s: *const u8, len: u32) -> CardToPlayRequest {
     assert!(!s.is_null());
     let bytes = unsafe {slice::from_raw_parts(s, len as usize)};
     let r_str = String::from_utf8(bytes.to_vec()).unwrap();
-    let req = hearts_json::parse_card_to_play_request(&r_str).unwrap();
+    return hearts_json::parse_card_to_play_request(&r_str).unwrap();
+}
+
+// Parses `len` bytes of `s` as a JSON-encoded CardToPlayRequest.
+// Returns the best card to play as an index into the "hand" field of the request.
+// See ffi_test.py for an example of how to call.
+#[no_mangle]
+pub extern fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
+    let req = unsafe {card_to_play_req_from_json(s, len)};
     let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
         0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
     let mut rng = thread_rng();
@@ -49,4 +56,24 @@ pub extern fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
         Some(i) => i as i32,
         None => -1,
     };
+}
+
+// Parses `len` bytes of `s` as a JSON-encoded CardToPlayRequest.
+// Determines the legal cards to play for the hand in the request, and for each
+// card at index i in the hand writes a 1 to `legal_out[i]` if the card is legal
+// to play and writes 0 if not. The size of `legal_out` must be at least the
+// number of cards in the hand.
+#[no_mangle]
+pub extern fn legal_plays_from_json(s: *const u8, len: u32, legal_out: *mut u8, out_len: u32) {
+    let req = unsafe {card_to_play_req_from_json(s, len)};
+    let legal_plays = req.legal_plays();
+    if req.hand.len() > (out_len as usize) {
+        panic!("`out_len` is {} but hand has {} cards", out_len, req.hand.len());
+    }
+    for (i, card) in req.hand.iter().enumerate() {
+        let val: u8 = if legal_plays.contains(card) {1} else {0};
+        unsafe {
+            std::ptr::write_unaligned(legal_out.offset(i as isize), val);
+        }
+    }
 }

@@ -25,4 +25,4 @@ path = "src/main_json.rs"
 [lib]
 name = "hearts"
 path = "src/main_json.rs"
-crate-type = ["dylib"]
+crate-type = ["cdylib"]
