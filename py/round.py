@@ -68,5 +68,12 @@ class Round:
             assert len(set(num_cards_left)) == 1
             self.current_trick = Trick(leader=winner) if num_cards_left[0] > 0 else None
 
+    def last_trick_winner(self):
+        return self.prev_tricks[-1].winner if self.prev_tricks else None
+
+    def did_trick_just_finish(self):
+        return (self.current_trick is not None and len(self.current_trick.cards) == 0 and
+                len(self.prev_tricks) > 0)
+
     def is_finished(self):
         return self.current_trick is None and len(self.prev_tricks) > 0
