@@ -1,7 +1,8 @@
 from ctypes import cdll, c_char, c_int32
 import json
 
-lib = cdll.LoadLibrary('../rust/target/release/libhearts.dylib')
+# FIXME: Get the right shared library for the platform.
+lib = None # cdll.LoadLibrary('../rust/target/release/libhearts.dylib')
 
 
 def serialize_cards(cards):
@@ -25,6 +26,9 @@ def json_bytes_for_round(rnd):
 
 
 def legal_plays(rnd):
+    if not lib:
+        return rnd.hands[rnd.current_player()][:]
+
     req_bytes = json_bytes_for_round(rnd)
     hand = rnd.hands[rnd.current_player()]
     buf_len = len(hand)
@@ -36,6 +40,9 @@ def legal_plays(rnd):
 
 
 def best_play(rnd):
+    if not lib:
+        return rnd.hands[rnd.current_player()][0]
+
     req_bytes = json_bytes_for_round(rnd)
     hand = rnd.hands[rnd.current_player()]
     best_card_index = lib.card_to_play_from_json(req_bytes, len(req_bytes))
@@ -43,6 +50,9 @@ def best_play(rnd):
 
 
 def points_taken(rnd):
+    if not lib:
+        return [0] * rnd.rules.num_players
+
     req = {
         "tricks": [serialize_trick(t) for t in rnd.prev_tricks],
     }

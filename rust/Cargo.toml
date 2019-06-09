@@ -20,7 +20,7 @@ path = "src/main_ai_rounds.rs"
 
 [[bin]]
 name = "hearts_json"
-path = "src/main_json.rs"
+path = "src/main_api.rs"
 
 [lib]
 name = "hearts"
