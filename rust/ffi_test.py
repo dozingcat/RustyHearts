@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from ctypes import cdll, c_char
+from ctypes import cdll, c_char, c_int32
 import json
 import sys
 
@@ -15,8 +15,8 @@ cards = req['hand'].split()
 req_bytes = json.dumps(req).encode('utf-8')
 
 buf_len = 13
-arr_type = c_char * buf_len
-legal_play_buffer = arr_type.from_buffer(bytearray(buf_len))
+char_array_type = c_char * buf_len
+legal_play_buffer = char_array_type.from_buffer(bytearray(buf_len))
 lib.legal_plays_from_json(req_bytes, len(req_bytes), legal_play_buffer, buf_len)
 # `legal_cards` now has byte values of 1 corresponding to legal cards to play.
 legal_cards = [card for (card, legal) in zip(cards, legal_play_buffer) if ord(legal)]
@@ -27,3 +27,17 @@ if best_card_index < 0:
     print(f'Error selecting best card: {best_card_index}')
 else:
     print(f'Best card: {cards[best_card_index]}')
+
+
+score_req = {
+    "tricks": [
+        {"leader": 2, "cards": "2C AC QC KC"},
+        {"leader": 3, "cards": "2S 5S AS QS"},
+        {"leader": 1, "cards": "2D 9H KD AH"},
+    ]
+}
+score_req_bytes = json.dumps(score_req).encode('utf-8')
+i32_array_type = c_int32 * 4
+score_buffer = i32_array_type.from_buffer(bytearray(16))
+lib.points_taken_from_json(score_req_bytes, len(score_req_bytes), score_buffer, 4)
+print(f'Scores: {list(score_buffer)}')

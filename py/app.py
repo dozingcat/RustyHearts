@@ -62,12 +62,14 @@ class MyApp(App):
             if self.hearts_round.did_trick_just_finish():
                 w = self.hearts_round.last_trick_winner()
                 print(f'Player {w} takes the trick')
+                print(f'Points: {capi.points_taken(self.hearts_round)}')
                 Clock.schedule_once(lambda dt: self.schedule_opponent_play(), 2)
             else:
                 self.schedule_opponent_play()
 
     def do_round_finished(self):
         print('Round over')
+        print(f'Final points: {capi.points_taken(self.hearts_round)}')
         Clock.schedule_once(lambda dt: self.start_game(), 3)
 
     def schedule_opponent_play(self):

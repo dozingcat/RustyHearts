@@ -35,10 +35,14 @@ fn main() {
     println!("{}", ai_card.symbol_string());
 }
 
-unsafe fn card_to_play_req_from_json(s: *const u8, len: u32) -> CardToPlayRequest {
+fn string_from_ptr(s: *const u8, len: u32) -> String {
     assert!(!s.is_null());
     let bytes = unsafe {slice::from_raw_parts(s, len as usize)};
-    let r_str = String::from_utf8(bytes.to_vec()).unwrap();
+    return String::from_utf8(bytes.to_vec()).unwrap();
+}
+
+fn card_to_play_req_from_json(s: *const u8, len: u32) -> CardToPlayRequest {
+    let r_str = string_from_ptr(s, len);
     return hearts_json::parse_card_to_play_request(&r_str).unwrap();
 }
 
@@ -63,6 +67,7 @@ pub extern fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
 // card at index i in the hand writes a 1 to `legal_out[i]` if the card is legal
 // to play and writes 0 if not. The size of `legal_out` must be at least the
 // number of cards in the hand.
+// See ffi_test.py for an example of how to call.
 #[no_mangle]
 pub extern fn legal_plays_from_json(s: *const u8, len: u32, legal_out: *mut u8, out_len: u32) {
     let req = unsafe {card_to_play_req_from_json(s, len)};
@@ -74,6 +79,25 @@ pub extern fn legal_plays_from_json(s: *const u8, len: u32, legal_out: *mut u8, 
         let val: u8 = if legal_plays.contains(card) {1} else {0};
         unsafe {
             std::ptr::write_unaligned(legal_out.offset(i as isize), val);
+        }
+    }
+}
+
+// Parses `len` bytes of `s` as a JSON-encoded trick history.
+// Writes the points taken by each player to `points_out`, whose size must be
+// at least the number of players.
+// See ffi_test.py for an example of how to call.
+#[no_mangle]
+pub extern fn points_taken_from_json(s: *const u8, len: u32, points_out: *mut i32, out_len: u32) {
+    let r_str = string_from_ptr(s, len);
+    let history = hearts_json::parse_trick_history(&r_str).unwrap();
+    if history.rules.num_players > (out_len as usize) {
+        panic!("`out_len` is {} but there are {} players", out_len, history.rules.num_players);
+    }
+    let points = history.points_taken();
+    for (i, player_points) in points.iter().enumerate() {
+        unsafe {
+            std::ptr::write_unaligned(points_out.offset(i as isize), *player_points);
         }
     }
 }
