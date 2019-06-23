@@ -23,7 +23,8 @@ fn main() {
     let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
         0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
     deck.shuffle(&mut rng);
-    let mut round = hearts::Round::deal(&deck, hearts::RuleSet::default());
+    let pass_dir = 0u32;
+    let mut round = hearts::Round::deal(&deck, hearts::RuleSet::default(), pass_dir);
     println!("Your hand: {}", all_suit_groups(&round.players[0].hand));
 
     fn print_trick_winner(winner: usize) {

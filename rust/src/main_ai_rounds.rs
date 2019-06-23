@@ -27,7 +27,8 @@ fn main() {
 
     for _ in 0..1000000 {
         deck.shuffle(&mut rng);
-        let mut round = hearts::Round::deal(&deck, hearts::RuleSet::default());
+        let pass_dir = 0u32;
+        let mut round = hearts::Round::deal(&deck, hearts::RuleSet::default(), pass_dir);
         for i in 0..round.players.len() {
             println!("P{}: {}", i, all_suit_groups(&round.players[i].hand));
         }

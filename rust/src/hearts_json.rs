@@ -68,6 +68,9 @@ struct JsonCardToPlayRequest {
     hand: String,
     prev_tricks: Vec<JsonTrick>,
     current_trick: JsonTrick,
+    pub pass_direction: u32,
+    pub passed_cards: String,
+    pub received_cards: String,
 }
 
 impl JsonCardToPlayRequest {
@@ -77,6 +80,9 @@ impl JsonCardToPlayRequest {
             hand: cards_from_str(&self.hand)?,
             prev_tricks: JsonTrick::to_tricks(&self.prev_tricks)?,
             current_trick: self.current_trick.to_trick_in_progress()?,
+            pass_direction: self.pass_direction,
+            passed_cards: cards_from_str(&self.passed_cards)?,
+            received_cards: cards_from_str(&self.received_cards)?,
         });
     }
 }
@@ -128,7 +134,10 @@ mod test {
             {
                 "hand": "2C 8D AS",
                 "prev_tricks": [],
-                "current_trick": {"leader": 0, "cards": ""}
+                "current_trick": {"leader": 0, "cards": ""},
+                "pass_direction": 0,
+                "passed_cards": "",
+                "received_cards": ""
             }
         "#).unwrap();
         assert_eq!(req.hand.len(), 3);

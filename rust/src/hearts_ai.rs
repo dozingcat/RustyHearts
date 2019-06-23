@@ -25,8 +25,18 @@ pub struct CardToPlayRequest  {
     pub hand: Vec<Card>,
     pub prev_tricks: Vec<hearts::Trick>,
     pub current_trick: hearts::TrickInProgress,
-    // TODO: passed/received cards
+    pub pass_direction: u32,
+    pub passed_cards: Vec<Card>,
+    pub received_cards: Vec<Card>,
     // TODO: scores before this round (for match equity calculations)
+}
+
+pub struct CardsToPassRequest {
+    pub rules: hearts::RuleSet,
+    // TODO: scores before this round (do we need to help somebody not lose?)
+    pub hand: Vec<Card>,
+    pub direction: u32,
+    pub num_cards: u32,
 }
 
 impl CardToPlayRequest {
@@ -36,6 +46,9 @@ impl CardToPlayRequest {
             hand: round.current_player().hand.clone(),
             prev_tricks: round.prev_tricks.clone(),
             current_trick: round.current_trick.clone(),
+            pass_direction: round.pass_direction,
+            passed_cards: round.current_player().passed_cards.clone(),
+            received_cards: round.current_player().received_cards.clone(),
         };
     }
 
@@ -304,13 +317,17 @@ fn possible_round(cc_req: &CardToPlayRequest, dist_req: &CardDistributionRequest
     let mut result_players: Vec<hearts::Player> = Vec::new();
     for i in 0..cc_req.rules.num_players {
         let h = (if i == cur_player {&cc_req.hand} else {&dist[i]});
-        result_players.push(hearts::Player {hand: h.clone()});
+        result_players.push(hearts::Player::new(h));
     }
     return Some(hearts::Round {
         rules: cc_req.rules.clone(),
         players: result_players,
         current_trick: cc_req.current_trick.clone(),
         prev_tricks: cc_req.prev_tricks.clone(),
+        status: hearts::RoundStatus::Playing,
+        // Ignore passed cards.
+        pass_direction: 0,
+        num_passed_cards: 0,
     });
 }
 
