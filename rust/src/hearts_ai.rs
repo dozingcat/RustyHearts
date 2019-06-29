@@ -299,10 +299,17 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
         counts[pi] -= 1;
     }
     counts[req.current_player_index()] = 0;
+    let mut constraints: Vec<CardDistributionPlayerConstraint> = Vec::new();
+    for i in 0..num_players {
+        constraints.push(CardDistributionPlayerConstraint {
+            num_cards: counts[i],
+            voided_suits: voided_suits[i].clone(),
+            fixed_cards: HashSet::new(),
+        });
+    }
     return CardDistributionRequest {
         cards: cards_to_assign,
-        counts: counts,
-        voided_suits: voided_suits,
+        constraints: constraints,
     };
 }
 
