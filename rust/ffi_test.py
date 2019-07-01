@@ -6,10 +6,16 @@ import sys
 
 lib = cdll.LoadLibrary('target/release/libhearts.dylib')
 
+# If the player passed QS to the left (pass_direction=1), a low spade should be
+# chosen to play. If the player passed QS to the right (pass_direction=3), the
+# king of spades should be played because the queen can't be taken.
 req = {
     "hand": "KS 9S 2S KH 3H 2H 9D 8D 7D 9C 8C 3C",
-    "prev_tricks": [{"leader": 0, "cards": "2C AC KC QC"}],
-    "current_trick": {"leader": 1, "cards": "4S 8S QS"}
+    "prev_tricks": [{"leader": 0, "cards": "2C KC AC QC"}],
+    "current_trick": {"leader": 1, "cards": "4S 8S"},
+    "pass_direction": 1,
+    "passed_cards": "AS QS QD",
+    "received_cards": "KH 9C 8C",
 }
 cards = req['hand'].split()
 req_bytes = json.dumps(req).encode('utf-8')

@@ -39,6 +39,11 @@ pub struct CardsToPassRequest {
     pub num_cards: u32,
 }
 
+pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
+    // TODO: Make this real.
+    return req.hand[0..(req.num_cards as usize)].to_vec();
+}
+
 impl CardToPlayRequest {
     pub fn from_round(round: &hearts::Round) -> CardToPlayRequest {
         return CardToPlayRequest {
@@ -306,6 +311,12 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
             voided_suits: voided_suits[i].clone(),
             fixed_cards: HashSet::new(),
         });
+    }
+    if (req.passed_cards.len() > 0) {
+        let passed_to = (req.current_player_index() + (req.pass_direction as usize)) % num_players;
+        for c in req.passed_cards.iter() {
+            constraints[passed_to].fixed_cards.insert(*c);
+        }
     }
     return CardDistributionRequest {
         cards: cards_to_assign,

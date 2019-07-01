@@ -204,7 +204,7 @@ pub fn random_from_set<T>(items: &HashSet<T>, mut rng :impl Rng) -> &T {
     return ci.next().unwrap();
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CardDistributionPlayerConstraint {
     pub num_cards: usize,
     pub voided_suits: HashSet<Suit>,
@@ -379,14 +379,6 @@ mod test {
             [Rank::ACE, Rank::num(10), Rank::num(7), Rank::num(2)]);
     }
 
-    fn make_suit_sets(n: u32) -> Vec<HashSet<Suit>> {
-        let mut ss: Vec<HashSet<Suit>> = Vec::new();
-        for _i in 0..n {
-            ss.push(HashSet::new());
-        }
-        return ss;
-    }
-
     fn make_constraints(n: usize, num_cards: usize) -> Vec<CardDistributionPlayerConstraint> {
         let mut c: Vec<CardDistributionPlayerConstraint> = Vec::new();
         for i in 0..n {
@@ -414,7 +406,6 @@ mod test {
         }
     }
 
-/*
     #[test]
     fn test_card_distribution_void_suits() {
         let mut rng: StdRng = SeedableRng::seed_from_u64(42);
@@ -424,15 +415,14 @@ mod test {
             c("2D"), c("3D"), c("4D"),
             c("2C"), c("3C"), c("4C"),
         ];
-        let mut voids = make_suit_sets(4);
-        voids[0].insert(Suit::Spades);
-        voids[2].insert(Suit::Spades);
-        voids[2].insert(Suit::Hearts);
-        voids[2].insert(Suit::Diamonds);
+        let mut constraints = make_constraints(4, 3);
+        constraints[0].voided_suits.insert(Suit::Spades);
+        constraints[2].voided_suits.insert(Suit::Spades);
+        constraints[2].voided_suits.insert(Suit::Hearts);
+        constraints[2].voided_suits.insert(Suit::Diamonds);
         let req = CardDistributionRequest {
             cards: cards,
-            counts: vec![3, 3, 3, 3],
-            voided_suits: voids,
+            constraints: constraints,
         };
         let dist = possible_card_distribution(&req, &mut rng).unwrap();
         assert_eq!(dist.len(), 4);
@@ -443,5 +433,33 @@ mod test {
         assert_eq!(
             ranks_for_suit(&dist[2], Suit::Clubs), [Rank::num(4), Rank::num(3), Rank::num(2)]);
     }
-    */
+
+    #[test]
+    fn test_card_distribution_fixed_cards() {
+        let mut rng: StdRng = SeedableRng::seed_from_u64(42);
+        let cards = vec![
+            c("2S"), c("3S"), c("4S"),
+            c("2H"), c("3H"), c("4H"),
+            c("2D"), c("3D"), c("4D"),
+            c("2C"), c("3C"), c("4C"),
+        ];
+        let mut constraints = make_constraints(4, 3);
+        constraints[1].fixed_cards.insert(c("2H"));
+        constraints[3].fixed_cards.insert(c("3D"));
+        constraints[3].fixed_cards.insert(c("4D"));
+        constraints[3].fixed_cards.insert(c("AD"));
+        let req = CardDistributionRequest {
+            cards: cards,
+            constraints: constraints,
+        };
+        let dist = possible_card_distribution(&req, &mut rng).unwrap();
+        assert_eq!(dist.len(), 4);
+        for cards in dist.iter() {
+            assert_eq!(cards.len(), 3);
+        }
+        assert!(dist[1].contains(&c("2H")));
+        assert!(dist[3].contains(&c("3D")));
+        assert!(dist[3].contains(&c("4D")));
+        assert!(!dist[3].contains(&c("AD")));
+    }
 }
