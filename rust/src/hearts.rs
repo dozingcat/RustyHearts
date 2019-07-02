@@ -1,5 +1,7 @@
 use crate::card::*;
 
+use std::collections::HashSet;
+
 pub const QUEEN_OF_SPADES: Card = Card {rank: Rank::QUEEN, suit: Suit::Spades};
 pub const TWO_OF_CLUBS: Card = Card {rank: Rank::TWO, suit: Suit::Clubs};
 pub const JACK_OF_DIAMONDS: Card = Card {rank: Rank::JACK, suit: Suit::Diamonds};
@@ -115,7 +117,7 @@ pub struct Round {
 }
 
 impl Round {
-    pub fn deal(deck: &Deck, rules: RuleSet, pass_direction: u32) -> Round {
+    pub fn deal(deck: &Deck, rules: &RuleSet, pass_direction: u32) -> Round {
         let mut players: Vec<Player> = Vec::new();
         // TODO: Don't hardcode to 4 players and 13 cards.
         for i in 0..4 {
@@ -126,7 +128,7 @@ impl Round {
         let current_player_index = find_card(&players, &TWO_OF_CLUBS);
         let status = if pass_direction == 0 {RoundStatus::Playing} else {RoundStatus::Passing};
         return Round {
-            rules: rules,
+            rules: rules.clone(),
             players: players,
             num_passed_cards: 3,
             pass_direction: pass_direction,
@@ -161,10 +163,23 @@ impl Round {
         return are_hearts_broken(&self.current_trick, &self.prev_tricks, &self.rules);
     }
 
-    pub fn set_passed_cards_for_player(&mut self, player_index: u32, cards: &[Card]) {
+    pub fn can_pass_cards(&self, player_index: usize, cards: &[Card]) -> bool {
+        if cards.len() != (self.num_passed_cards as usize) {
+            return false;
+        }
+        let cs: HashSet<Card> = cards.iter().cloned().collect();
+        for c in cs {
+            if !self.players[player_index].hand.contains(&c) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    pub fn set_passed_cards_for_player(&mut self, player_index: usize, cards: &[Card]) {
         assert!(self.status == RoundStatus::Passing);
         assert!((player_index as usize) < self.rules.num_players);
-        assert!(cards.len() == (self.num_passed_cards as usize));
+        assert!(self.can_pass_cards(player_index, cards));
         self.players[player_index as usize].passed_cards = cards.to_vec();
     }
 
@@ -185,7 +200,7 @@ impl Round {
         let num_players = self.rules.num_players as usize;
         for pnum in 0..num_players {
             let pass_dest = (pnum + (self.pass_direction as usize)) % num_players;
-            self.players[pass_dest].passed_cards = self.players[pnum].passed_cards.clone();
+            self.players[pass_dest].received_cards = self.players[pnum].passed_cards.clone();
         }
         for pnum in 0..num_players {
             let mut p = &mut self.players[pnum];
@@ -197,8 +212,9 @@ impl Round {
                 }
             }
             p.hand = new_hand;
-            assert!(p.hand.len() == n);
+            assert_eq!(p.hand.len(), n);
         }
+        self.current_trick.leader = find_card(&self.players, &TWO_OF_CLUBS);
         self.status = RoundStatus::Playing;
     }
 

@@ -141,6 +141,17 @@ pub fn cards_from_str(s: &str) -> Result<Vec<Card>, CardError> {
     return Ok(cards);
 }
 
+pub fn symbol_str_from_cards(cards: &[Card]) -> String {
+    let mut s = String::new();
+    for (i, c) in cards.iter().enumerate() {
+        if i > 0 {
+            s.push_str(" ");
+        }
+        s.push_str(&c.symbol_string());
+    }
+    return s;
+}
+
 pub fn for_each_card(mut f: impl FnMut(&Card)) {
     for r in 2..=14 {
         let rank = Rank::num(r);

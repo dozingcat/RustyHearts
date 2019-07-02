@@ -20,12 +20,51 @@ use hearts_ai::CardToPlayStrategy;
 fn main() {
     let mut deck = Deck::new();
     let mut rng = thread_rng();
+    let rules = hearts::RuleSet::default();
     let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
         0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
     deck.shuffle(&mut rng);
-    let pass_dir = 0u32;
-    let mut round = hearts::Round::deal(&deck, hearts::RuleSet::default(), pass_dir);
+    let pass_dir = 1u32;
+    let mut round = hearts::Round::deal(&deck, &rules, pass_dir);
     println!("Your hand: {}", all_suit_groups(&round.players[0].hand));
+    if pass_dir > 0 {
+        let mut passed = false;
+        while !passed {
+            println!("Enter 3 cards to pass:");
+            let mut input = String::new();
+            if io::stdin().read_line(&mut input).is_ok() {
+                match cards_from_str(&input) {
+                    Ok(cards) => {
+                        if round.can_pass_cards(0, &cards) {
+                            round.set_passed_cards_for_player(0, &cards);
+                            passed = true;
+                        }
+                        else {
+                            println!("Cannot pass those cards");
+                        }
+                    }
+                    Err(error) => {
+                        println!("Invalid input");
+                    }
+                };
+            }
+        }
+        for i in 1..round.players.len() {
+            let pass_req = hearts_ai::CardsToPassRequest {
+                rules: rules.clone(),
+                hand: round.players[i].hand.clone(),
+                direction: pass_dir,
+                num_cards: 3,
+            };
+            let cards = hearts_ai::choose_cards_to_pass(&pass_req);
+            // println!("P{} passes {}", i, symbol_str_from_cards(&cards));
+            round.set_passed_cards_for_player(i, &cards);
+        }
+        round.pass_cards();
+        println!("You received: {}", symbol_str_from_cards(&round.players[0].received_cards));
+        println!("Your hand: {}", all_suit_groups(&round.players[0].hand));
+    }
+
 
     fn print_trick_winner(winner: usize) {
         if winner == 0 {
@@ -62,7 +101,7 @@ fn main() {
                     Err(error) => {
                         println!("Invalid card");
                     }
-                }
+                };
             }
         }
         else {
