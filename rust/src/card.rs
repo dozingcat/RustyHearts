@@ -141,6 +141,17 @@ pub fn cards_from_str(s: &str) -> Result<Vec<Card>, CardError> {
     return Ok(cards);
 }
 
+pub fn symbol_str_from_cards(cards: &[Card]) -> String {
+    let mut s = String::new();
+    for (i, c) in cards.iter().enumerate() {
+        if i > 0 {
+            s.push_str(" ");
+        }
+        s.push_str(&c.symbol_string());
+    }
+    return s;
+}
+
 pub fn for_each_card(mut f: impl FnMut(&Card)) {
     for r in 2..=14 {
         let rank = Rank::num(r);
@@ -204,26 +215,40 @@ pub fn random_from_set<T>(items: &HashSet<T>, mut rng :impl Rng) -> &T {
     return ci.next().unwrap();
 }
 
+#[derive(Debug)]
+pub struct CardDistributionPlayerConstraint {
+    pub num_cards: usize,
+    pub voided_suits: HashSet<Suit>,
+    pub fixed_cards: HashSet<Card>,
+}
+
 pub struct CardDistributionRequest {
     pub cards: Vec<Card>,
-    pub counts: Vec<usize>,
-    pub voided_suits: Vec<HashSet<Suit>>,
+    pub constraints: Vec<CardDistributionPlayerConstraint>,
+    // It is legal if the CardDistributionPlayerConstraint for player i has a
+    // fixed card that is not in `cards`.
 }
 
 fn _possible_card_distribution(req: &CardDistributionRequest, mut rng: impl Rng)
         -> Result<Vec<Vec<Card>>, CardError> {
-    if req.counts.len() != req.voided_suits.len() {
-        return Err(CardError::new("Inconsistent sizes of `counts` and `voided_suits`"));
-    }
-    let num_players = req.voided_suits.len();
+    let num_players = req.constraints.len();
     let mut result: Vec<Vec<Card>> = Vec::new();
     let mut legal_cards: Vec<HashSet<Card>> = Vec::new();
     // Create sets of possible cards for each player.
-    for voids in req.voided_suits.iter() {
+    for (i, cs) in req.constraints.iter().enumerate() {
         let mut legal_for_player: HashSet<Card> = HashSet::new();
+        // Add cards in suits that the player isn't known to be out of.
         for &c in req.cards.iter() {
-            if !voids.contains(&c.suit) {
+            if !cs.voided_suits.contains(&c.suit) {
                 legal_for_player.insert(c);
+            }
+        }
+        // Remove cards that are fixed to other players.
+        for (j, other_cs) in req.constraints.iter().enumerate() {
+            if i != j {
+                for &c in other_cs.fixed_cards.iter() {
+                    legal_for_player.remove(&c);
+                }
             }
         }
         legal_cards.push(legal_for_player);
@@ -234,7 +259,7 @@ fn _possible_card_distribution(req: &CardDistributionRequest, mut rng: impl Rng)
         let mut took_all = false;
         for i in 0..num_players {
             // If any player's remaining cards are forced, take them all.
-            let num_to_fill = req.counts[i] - result[i].len();
+            let num_to_fill = req.constraints[i].num_cards - result[i].len();
             if num_to_fill > 0 {
                 let num_legal = legal_cards[i].len();
                 if num_to_fill > num_legal {
@@ -261,7 +286,7 @@ fn _possible_card_distribution(req: &CardDistributionRequest, mut rng: impl Rng)
         // Nobody had a forced pick, choose one card for one player.
         let mut chose_card = false;
         for i in 0..num_players {
-            let num_to_fill = req.counts[i] - result[i].len();
+            let num_to_fill = req.constraints[i].num_cards - result[i].len();
             if num_to_fill > 0 {
                 let c = *random_from_set(&legal_cards[i], &mut rng);
                 result[i].push(c);
@@ -290,8 +315,7 @@ pub fn possible_card_distribution(
         }
     }
     println!("cards: {}", all_suit_groups(&req.cards));
-    println!("counts: {:?}", &req.counts);
-    println!("voids: {:?}", &req.voided_suits);
+    println!("constraints: {:?}", &req.constraints);
     return Err(CardError::new("Cannot satisfy constraints after 10000 attempts"));
 }
 
@@ -366,12 +390,16 @@ mod test {
             [Rank::ACE, Rank::num(10), Rank::num(7), Rank::num(2)]);
     }
 
-    fn make_suit_sets(n: u32) -> Vec<HashSet<Suit>> {
-        let mut ss: Vec<HashSet<Suit>> = Vec::new();
-        for _i in 0..n {
-            ss.push(HashSet::new());
+    fn make_constraints(n: usize, num_cards: usize) -> Vec<CardDistributionPlayerConstraint> {
+        let mut c: Vec<CardDistributionPlayerConstraint> = Vec::new();
+        for i in 0..n {
+            c.push(CardDistributionPlayerConstraint {
+                num_cards: num_cards,
+                voided_suits: HashSet::new(),
+                fixed_cards: HashSet::new(),
+            });
         }
-        return ss;
+        return c;
     }
 
     #[test]
@@ -380,8 +408,7 @@ mod test {
         let deck = Deck::new();
         let req = CardDistributionRequest {
             cards: deck.cards.clone(),
-            counts: vec![13, 13, 13, 13],
-            voided_suits: make_suit_sets(4),
+            constraints: make_constraints(4, 13),
         };
         let dist = possible_card_distribution(&req, &mut rng).unwrap();
         assert_eq!(dist.len(), 4);
@@ -399,15 +426,14 @@ mod test {
             c("2D"), c("3D"), c("4D"),
             c("2C"), c("3C"), c("4C"),
         ];
-        let mut voids = make_suit_sets(4);
-        voids[0].insert(Suit::Spades);
-        voids[2].insert(Suit::Spades);
-        voids[2].insert(Suit::Hearts);
-        voids[2].insert(Suit::Diamonds);
+        let mut constraints = make_constraints(4, 3);
+        constraints[0].voided_suits.insert(Suit::Spades);
+        constraints[2].voided_suits.insert(Suit::Spades);
+        constraints[2].voided_suits.insert(Suit::Hearts);
+        constraints[2].voided_suits.insert(Suit::Diamonds);
         let req = CardDistributionRequest {
             cards: cards,
-            counts: vec![3, 3, 3, 3],
-            voided_suits: voids,
+            constraints: constraints,
         };
         let dist = possible_card_distribution(&req, &mut rng).unwrap();
         assert_eq!(dist.len(), 4);
@@ -417,5 +443,34 @@ mod test {
         assert_eq!(ranks_for_suit(&dist[0], Suit::Spades), []);
         assert_eq!(
             ranks_for_suit(&dist[2], Suit::Clubs), [Rank::num(4), Rank::num(3), Rank::num(2)]);
+    }
+
+    #[test]
+    fn test_card_distribution_fixed_cards() {
+        let mut rng: StdRng = SeedableRng::seed_from_u64(42);
+        let cards = vec![
+            c("2S"), c("3S"), c("4S"),
+            c("2H"), c("3H"), c("4H"),
+            c("2D"), c("3D"), c("4D"),
+            c("2C"), c("3C"), c("4C"),
+        ];
+        let mut constraints = make_constraints(4, 3);
+        constraints[1].fixed_cards.insert(c("2H"));
+        constraints[3].fixed_cards.insert(c("3D"));
+        constraints[3].fixed_cards.insert(c("4D"));
+        constraints[3].fixed_cards.insert(c("AD"));
+        let req = CardDistributionRequest {
+            cards: cards,
+            constraints: constraints,
+        };
+        let dist = possible_card_distribution(&req, &mut rng).unwrap();
+        assert_eq!(dist.len(), 4);
+        for cards in dist.iter() {
+            assert_eq!(cards.len(), 3);
+        }
+        assert!(dist[1].contains(&c("2H")));
+        assert!(dist[3].contains(&c("3D")));
+        assert!(dist[3].contains(&c("4D")));
+        assert!(!dist[3].contains(&c("AD")));
     }
 }

@@ -2,7 +2,8 @@ from ctypes import cdll, c_char, c_int32
 import json
 
 # FIXME: Get the right shared library for the platform.
-lib = None # cdll.LoadLibrary('../rust/target/release/libhearts.dylib')
+# lib = None
+lib = cdll.LoadLibrary('../rust/target/release/libhearts.dylib')
 
 
 def serialize_cards(cards):
@@ -17,10 +18,14 @@ def serialize_trick(trick):
 
 
 def json_bytes_for_round(rnd):
+    # TODO: passed cards
     r = {
         'hand': serialize_cards(rnd.hands[rnd.current_player()]),
         'prev_tricks': [serialize_trick(t) for t in rnd.prev_tricks],
         'current_trick': serialize_trick(rnd.current_trick),
+        'pass_direction': 0,
+        'passed_cards': '',
+        'received_cards': '',
     }
     return json.dumps(r).encode('utf-8')
 

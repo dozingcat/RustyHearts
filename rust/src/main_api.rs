@@ -20,7 +20,10 @@ use hearts_ai::{CardToPlayRequest, CardToPlayStrategy};
 {
     "hand": "KS 9S 2S KH 3H 2H 9D 8D 7D 9C 8C 3C",
     "prev_tricks": [{"leader": 0, "cards": "2C AC KC QC"}],
-    "current_trick": {"leader": 1, "cards": "4S 8S"}
+    "current_trick": {"leader": 1, "cards": "4S 8S"},
+    "pass_direction": 0,
+    "passed_cards": "",
+    "received_cards": ""
 }
 */
 

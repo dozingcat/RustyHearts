@@ -1,5 +1,7 @@
 use crate::card::*;
 
+use std::collections::HashSet;
+
 pub const QUEEN_OF_SPADES: Card = Card {rank: Rank::QUEEN, suit: Suit::Spades};
 pub const TWO_OF_CLUBS: Card = Card {rank: Rank::TWO, suit: Suit::Clubs};
 pub const JACK_OF_DIAMONDS: Card = Card {rank: Rank::JACK, suit: Suit::Diamonds};
@@ -7,12 +9,13 @@ pub const JACK_OF_DIAMONDS: Card = Card {rank: Rank::JACK, suit: Suit::Diamonds}
 #[derive(Debug, Clone)]
 pub struct Player {
     pub hand: Vec<Card>,
-    // TODO: passed/received cards? (maybe better separately)
+    pub passed_cards: Vec<Card>,
+    pub received_cards: Vec<Card>,
 }
 
 impl Player {
     pub fn new(hand: &[Card]) -> Player {
-        return Player {hand: hand.to_vec()};
+        return Player {hand: hand.to_vec(), passed_cards: Vec::new(), received_cards: Vec::new()};
     }
 }
 
@@ -95,16 +98,26 @@ fn find_card(players: &[Player], target: &Card) -> usize {
     panic!("Didn't find {}", target.symbol_string());
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum RoundStatus {
+    Passing,
+    Playing,
+}
+
 #[derive(Debug, Clone)]
 pub struct Round {
     pub rules: RuleSet,
     pub players: Vec<Player>,
+    // e.g. 1 for passing left, rules.num_players-1 for passing right, 0 for no passing.
+    pub num_passed_cards: u32,
+    pub pass_direction: u32,
+    pub status: RoundStatus,
     pub current_trick: TrickInProgress,
     pub prev_tricks: Vec<Trick>,
 }
 
 impl Round {
-    pub fn deal(deck: &Deck, rules: RuleSet) -> Round {
+    pub fn deal(deck: &Deck, rules: &RuleSet, pass_direction: u32) -> Round {
         let mut players: Vec<Player> = Vec::new();
         // TODO: Don't hardcode to 4 players and 13 cards.
         for i in 0..4 {
@@ -113,9 +126,13 @@ impl Round {
             players.push(Player::new(&deck.cards[start..end]));
         }
         let current_player_index = find_card(&players, &TWO_OF_CLUBS);
+        let status = if pass_direction == 0 {RoundStatus::Playing} else {RoundStatus::Passing};
         return Round {
-            rules: rules,
+            rules: rules.clone(),
             players: players,
+            num_passed_cards: 3,
+            pass_direction: pass_direction,
+            status: status,
             current_trick: TrickInProgress::new(current_player_index),
             prev_tricks: Vec::new(),
         };
@@ -144,6 +161,61 @@ impl Round {
 
     pub fn are_hearts_broken(&self) -> bool {
         return are_hearts_broken(&self.current_trick, &self.prev_tricks, &self.rules);
+    }
+
+    pub fn can_pass_cards(&self, player_index: usize, cards: &[Card]) -> bool {
+        if cards.len() != (self.num_passed_cards as usize) {
+            return false;
+        }
+        let cs: HashSet<Card> = cards.iter().cloned().collect();
+        for c in cs {
+            if !self.players[player_index].hand.contains(&c) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    pub fn set_passed_cards_for_player(&mut self, player_index: usize, cards: &[Card]) {
+        assert!(self.status == RoundStatus::Passing);
+        assert!((player_index as usize) < self.rules.num_players);
+        assert!(self.can_pass_cards(player_index, cards));
+        self.players[player_index as usize].passed_cards = cards.to_vec();
+    }
+
+    pub fn ready_to_pass_cards(&self) -> bool {
+        if self.status != RoundStatus::Passing {
+            return false;
+        }
+        for p in self.players.iter() {
+            if p.passed_cards.len() != (self.num_passed_cards as usize) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    pub fn pass_cards(&mut self) {
+        assert!(self.ready_to_pass_cards());
+        let num_players = self.rules.num_players as usize;
+        for pnum in 0..num_players {
+            let pass_dest = (pnum + (self.pass_direction as usize)) % num_players;
+            self.players[pass_dest].received_cards = self.players[pnum].passed_cards.clone();
+        }
+        for pnum in 0..num_players {
+            let mut p = &mut self.players[pnum];
+            let n = p.hand.len();
+            let mut new_hand: Vec<Card> = p.received_cards.clone();
+            for &c in p.hand.iter() {
+                if !p.passed_cards.contains(&c) {
+                    new_hand.push(c);
+                }
+            }
+            p.hand = new_hand;
+            assert_eq!(p.hand.len(), n);
+        }
+        self.current_trick.leader = find_card(&self.players, &TWO_OF_CLUBS);
+        self.status = RoundStatus::Playing;
     }
 
     pub fn play_card(&mut self, card: &Card) -> Result<(), ()> {
