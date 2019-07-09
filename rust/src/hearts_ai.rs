@@ -88,13 +88,17 @@ pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
                 if ranks.len() >= 4 {
                     return 0;
                 }
-                // Always pass QS, but if passing right it's safe to keep KS and AS.
+                // Always pass QS.
                 if card.rank == Rank::QUEEN {
                     return 100;
                 }
+                // If we're passing the queen right, it's ok to keep AS and KS
+                // because we'll be able to safely play them (as long as we
+                // have a lower spade).
                 let passing_right = ((req.direction as usize) == req.rules.num_players - 1);
+                let has_queen = ranks.contains(&Rank::QUEEN);
                 let has_low_spade = (ranks[ranks.len() - 1] < Rank::QUEEN);
-                return (if passing_right && has_low_spade {cval - 5} else {100});
+                return (if passing_right && has_queen && has_low_spade {cval - 5} else {100});
             }
             Suit::Hearts => {
                 return cval + lowest_rank_in_suit;
@@ -554,5 +558,18 @@ mod test {
             num_cards: 3,
         };
         assert_eq!(choose_cards_to_pass(&req), c("QS AH 8H"));
+    }
+
+    #[test]
+    fn pass_high_spades_right_without_queen() {
+        let rules = hearts::RuleSet::default();
+        let req = CardsToPassRequest {
+            rules: rules.clone(),
+            scores_before_round: vec![0, 0, 0, 0],
+            hand: c("AS KS JS AH 8H 2H 6D 5D 4D 3D 6C 5C 4C"),
+            direction: 3,
+            num_cards: 3,
+        };
+        assert_eq!(choose_cards_to_pass(&req), c("AS KS AH"));
     }
 }
