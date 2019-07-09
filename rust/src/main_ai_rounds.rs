@@ -26,71 +26,104 @@ fn pass_direction_string(dir: u32) -> String {
     }).to_string();
 }
 
+fn get_victory_points(scores: &[i32]) -> Vec<u64> {
+    let best = *scores.iter().min().unwrap();
+    let mut vp: Vec<u64> = Vec::new();
+    let num_winners = scores.iter().filter(|&s| *s == best).count();
+    for s in scores.iter() {
+        vp.push(if *s == best {(12 / num_winners) as u64} else {0});
+    }
+    return vp;
+}
+
 fn main() {
     let mut deck = Deck::new();
     let mut rng = thread_rng();
     // let mut deck_rng: StdRng = SeedableRng::seed_from_u64(42);
 
-    let mut total_points: Vec<i64> = Vec::new();
-    total_points.resize(4, 0);
     let rules = hearts::RuleSet::default();
+    // 12 points for win, 6 for 2-way tie, 4 for 3-way, 3 for 4-way.
+    let mut victory_points: Vec<u64> = Vec::new();
+    victory_points.resize(rules.num_players, 0);
 
-    for round_num in 0..1000000 {
-        deck.shuffle(&mut rng);
-        let pass_dir = ((round_num + 1) % 4) as u32;
-        let mut round = hearts::Round::deal(&deck, &rules, pass_dir);
-        for i in 0..round.players.len() {
-            println!("P{}: {}", i, all_suit_groups(&round.players[i].hand));
-        }
-        if pass_dir > 0 {
-            println!("Pass {}", pass_direction_string(pass_dir));
-            for i in 0..round.players.len() {
-                let pass_req = hearts_ai::CardsToPassRequest {
-                    rules: rules.clone(),
-                    hand: round.players[i].hand.clone(),
-                    direction: pass_dir,
-                    num_cards: 3,
-                };
-                let cards = hearts_ai::choose_cards_to_pass(&pass_req);
-                println!("P{} passes {}", i, symbol_str_from_cards(&cards));
-                round.set_passed_cards_for_player(i, &cards);
-            }
-            round.pass_cards();
-            println!("After passing:");
+    for match_num in 0..1000000 {
+        println!("Match {}", match_num + 1);
+        let mut match_scores: Vec<i32> = Vec::new();
+        match_scores.resize(rules.num_players, 0);
+        let mut round_num = 0u32;
+        while *match_scores.iter().max().unwrap() < (rules.point_limit as i32) {
+            round_num += 1;
+            println!("Round {}", round_num);
+            deck.shuffle(&mut rng);
+            let pass_dir = round_num % 4;
+            let mut round = hearts::Round::deal(&deck, &rules, &match_scores, pass_dir);
             for i in 0..round.players.len() {
                 println!("P{}: {}", i, all_suit_groups(&round.players[i].hand));
             }
-        }
-        else {
-            println!("No passing");
-        }
-        let strategies = vec![
-            CardToPlayStrategy::AvoidPoints,
-            CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
-                0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
-            CardToPlayStrategy::MonteCarloRandom(
-                MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
-            CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
-                0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
-        ];
-
-        while !round.is_over() {
-            let card_to_play = hearts_ai::choose_card(
-                &hearts_ai::CardToPlayRequest::from_round(&round),
-                &strategies[round.current_player_index()], &mut rng);
-            println!("P{} plays {}", round.current_player_index(), card_to_play.symbol_string());
-            round.play_card(&card_to_play).expect("");
-            if round.current_trick.cards.is_empty() {
-                let t = round.prev_tricks.last().expect("");
-                println!("P{} takes the trick", t.winner);
+            if pass_dir > 0 {
+                println!("Pass {}", pass_direction_string(pass_dir));
+                for i in 0..round.players.len() {
+                    let pass_req = hearts_ai::CardsToPassRequest {
+                        rules: rules.clone(),
+                        hand: round.players[i].hand.clone(),
+                        direction: pass_dir,
+                        num_cards: 3,
+                        scores_before_round: match_scores.clone(),
+                    };
+                    let cards = if i == 3 {
+                        hearts_ai::choose_cards_to_pass(&pass_req)
+                    }
+                    else {
+                        hearts_ai::choose_cards_to_pass_random(&pass_req)
+                    };
+                    println!("P{} passes {}", i, symbol_str_from_cards(&cards));
+                    round.set_passed_cards_for_player(i, &cards);
+                }
+                round.pass_cards();
+                println!("After passing:");
+                for i in 0..round.players.len() {
+                    println!("P{}: {}", i, all_suit_groups(&round.players[i].hand));
+                }
             }
+            else {
+                println!("No passing");
+            }
+            let strategies = vec![
+                CardToPlayStrategy::AvoidPoints,
+                CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
+                    0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
+                CardToPlayStrategy::MonteCarloRandom(
+                    MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
+                CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
+                    0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20}),
+            ];
+
+            while !round.is_over() {
+                let card_to_play = hearts_ai::choose_card(
+                    &hearts_ai::CardToPlayRequest::from_round(&round),
+                    &strategies[round.current_player_index()], &mut rng);
+                println!("P{} plays {}", round.current_player_index(), card_to_play.symbol_string());
+                round.play_card(&card_to_play).expect("");
+                if round.current_trick.cards.is_empty() {
+                    let t = round.prev_tricks.last().expect("");
+                    println!("P{} takes the trick", t.winner);
+                }
+            }
+            let round_points = round.points_taken();
+            println!("Scores for round: {:?}", round_points);
+            for i in 0..match_scores.len() {
+                match_scores[i] += round_points[i];
+            }
+            println!("Scores for match: {:?}", match_scores);
+            println!("");
         }
-        let points = round.points_taken();
-        println!("Score: {:?}", points);
-        for (j, p) in points.iter().enumerate() {
-            total_points[j] += *p as  i64;
+        println!("Match over");
+        let vp = get_victory_points(&match_scores);
+        println!("Victory points for match: {:?}", vp);
+        for i in 0..vp.len() {
+            victory_points[i] += vp[i];
         }
-        println!("Total: {:?}", total_points);
-        println!("===========================\n");
+        println!("Total victory points: {:?}", victory_points);
+        println!("\n===========================\n");
     }
 }

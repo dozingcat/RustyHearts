@@ -6,34 +6,58 @@ import sys
 
 lib = cdll.LoadLibrary('target/release/libhearts.dylib')
 
+def choose_card_to_play(req):
+    cards = req['hand'].split()
+    req_bytes = json.dumps(req).encode('utf-8')
+
+    buf_len = 13
+    char_array_type = c_char * buf_len
+    legal_play_buffer = char_array_type.from_buffer(bytearray(buf_len))
+    lib.legal_plays_from_json(req_bytes, len(req_bytes), legal_play_buffer, buf_len)
+    # `legal_cards` now has byte values of 1 corresponding to legal cards to play.
+    legal_cards = [card for (card, legal) in zip(cards, legal_play_buffer) if ord(legal)]
+    print(f'Legal cards: {legal_cards}')
+
+    best_card_index = lib.card_to_play_from_json(req_bytes, len(req_bytes))
+    if best_card_index < 0:
+        print(f'Error selecting best card: {best_card_index}')
+    else:
+        print(f'Best card: {cards[best_card_index]}')
+
 # If the player passed QS to the left (pass_direction=1), a low spade should be
 # chosen to play. If the player passed QS to the right (pass_direction=3), the
 # king of spades should be played because the queen can't be taken.
-req = {
+choose_card_to_play({
+    "scores_before_round": [0, 0, 0, 0],
     "hand": "KS 9S 2S KH 3H 2H 9D 8D 7D 9C 8C 3C",
     "prev_tricks": [{"leader": 0, "cards": "2C KC AC QC"}],
     "current_trick": {"leader": 1, "cards": "4S 8S"},
     "pass_direction": 1,
     "passed_cards": "AS QS QD",
     "received_cards": "KH 9C 8C",
-}
-cards = req['hand'].split()
-req_bytes = json.dumps(req).encode('utf-8')
+})
 
-buf_len = 13
-char_array_type = c_char * buf_len
-legal_play_buffer = char_array_type.from_buffer(bytearray(buf_len))
-lib.legal_plays_from_json(req_bytes, len(req_bytes), legal_play_buffer, buf_len)
-# `legal_cards` now has byte values of 1 corresponding to legal cards to play.
-legal_cards = [card for (card, legal) in zip(cards, legal_play_buffer) if ord(legal)]
-print(f'Legal cards: {legal_cards}')
+choose_card_to_play({
+    "scores_before_round": [0, 0, 0, 0],
+    "hand": "KS 9S 2S KH 3H 2H 9D 8D 7D 9C 8C 3C",
+    "prev_tricks": [{"leader": 0, "cards": "2C KC AC QC"}],
+    "current_trick": {"leader": 1, "cards": "4S 8S"},
+    "pass_direction": 3,
+    "passed_cards": "AS QS QD",
+    "received_cards": "KH 9C 8C",
+})
 
-best_card_index = lib.card_to_play_from_json(req_bytes, len(req_bytes))
-if best_card_index < 0:
-    print(f'Error selecting best card: {best_card_index}')
-else:
-    print(f'Best card: {cards[best_card_index]}')
-
+# Here player 0 has to take the queen, otherwise player 3 will go over the point
+# limit and player 1 will win.
+choose_card_to_play({
+    "scores_before_round": [20, 0, 40, 90],
+    "hand": "KS 9S 2S KH 3H 2H 9D 8D 7D 9C 8C 3C",
+    "prev_tricks": [{"leader": 0, "cards": "2C KC AC QC"}],
+    "current_trick": {"leader": 1, "cards": "4S 8S QS"},
+    "pass_direction": 0,
+    "passed_cards": "",
+    "received_cards": "",
+})
 
 score_req = {
     "tricks": [
