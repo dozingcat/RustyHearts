@@ -488,7 +488,7 @@ pub fn choose_card_monte_carlo(
             }
         }
     }
-    println!("MC equities: {:?}", equity_per_play);
+    // println!("MC equities: {:?}", equity_per_play);
     return legal_plays[max_index(&equity_per_play)];
 }
 
