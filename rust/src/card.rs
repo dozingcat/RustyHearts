@@ -194,6 +194,7 @@ pub fn all_suit_groups(cards: &[Card]) -> String {
         suit_group(&cards, Suit::Clubs))
 }
 
+// Returns the ranks of cards in the given suit, sorted descending.
 pub fn ranks_for_suit(cards: &[Card], suit: Suit) -> Vec<Rank> {
     let mut ranks: Vec<Rank> = vec![];
     for &c in cards.iter() {

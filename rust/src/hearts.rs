@@ -108,16 +108,18 @@ pub enum RoundStatus {
 pub struct Round {
     pub rules: RuleSet,
     pub players: Vec<Player>,
+    // This is a bit ugly, we only need the scores for hearts_ai::CardToPlayeRequest::from_round.
+    pub initial_scores: Vec<i32>,
     // e.g. 1 for passing left, rules.num_players-1 for passing right, 0 for no passing.
-    pub num_passed_cards: u32,
     pub pass_direction: u32,
+    pub num_passed_cards: u32,
     pub status: RoundStatus,
     pub current_trick: TrickInProgress,
     pub prev_tricks: Vec<Trick>,
 }
 
 impl Round {
-    pub fn deal(deck: &Deck, rules: &RuleSet, pass_direction: u32) -> Round {
+    pub fn deal(deck: &Deck, rules: &RuleSet, scores: &[i32], pass_direction: u32) -> Round {
         let mut players: Vec<Player> = Vec::new();
         // TODO: Don't hardcode to 4 players and 13 cards.
         for i in 0..4 {
@@ -130,6 +132,7 @@ impl Round {
         return Round {
             rules: rules.clone(),
             players: players,
+            initial_scores: scores.to_vec(),
             num_passed_cards: 3,
             pass_direction: pass_direction,
             status: status,

@@ -64,19 +64,21 @@ impl JsonTrick {
 
 #[derive(Deserialize)]
 struct JsonCardToPlayRequest {
-    // TODO: rules, passed cards, match score.
+    // TODO: rules
+    scores_before_round: Vec<i32>,
     hand: String,
     prev_tricks: Vec<JsonTrick>,
     current_trick: JsonTrick,
-    pub pass_direction: u32,
-    pub passed_cards: String,
-    pub received_cards: String,
+    pass_direction: u32,
+    passed_cards: String,
+    received_cards: String,
 }
 
 impl JsonCardToPlayRequest {
     fn to_request(&self) -> Result<hearts_ai::CardToPlayRequest, CardError> {
         return Ok(hearts_ai::CardToPlayRequest {
             rules: hearts::RuleSet::default(),
+            scores_before_round: self.scores_before_round.clone(),
             hand: cards_from_str(&self.hand)?,
             prev_tricks: JsonTrick::to_tricks(&self.prev_tricks)?,
             current_trick: self.current_trick.to_trick_in_progress()?,
@@ -132,6 +134,7 @@ mod test {
     fn test_parse_request() {
         let req = parse_card_to_play_request(r#"
             {
+                "scores_before_round": [30, 10, 20, 40],
                 "hand": "2C 8D AS",
                 "prev_tricks": [],
                 "current_trick": {"leader": 0, "cards": ""},

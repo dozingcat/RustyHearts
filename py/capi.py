@@ -20,6 +20,7 @@ def serialize_trick(trick):
 def json_bytes_for_round(rnd):
     # TODO: passed cards
     r = {
+        'scores_before_round': [0] * rnd.rules.num_players,
         'hand': serialize_cards(rnd.hands[rnd.current_player()]),
         'prev_tricks': [serialize_trick(t) for t in rnd.prev_tricks],
         'current_trick': serialize_trick(rnd.current_trick),

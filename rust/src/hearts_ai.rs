@@ -1,6 +1,7 @@
 use crate::card::*;
 use crate::hearts;
 
+use std::collections::HashMap;
 use std::collections::HashSet;
 use rand::Rng;
 use rand::seq::SliceRandom;
@@ -22,32 +23,121 @@ pub enum CardToPlayStrategy {
 
 pub struct CardToPlayRequest  {
     pub rules: hearts::RuleSet,
+    pub scores_before_round: Vec<i32>,
     pub hand: Vec<Card>,
     pub prev_tricks: Vec<hearts::Trick>,
     pub current_trick: hearts::TrickInProgress,
     pub pass_direction: u32,
     pub passed_cards: Vec<Card>,
     pub received_cards: Vec<Card>,
-    // TODO: scores before this round (for match equity calculations)
 }
 
 pub struct CardsToPassRequest {
     pub rules: hearts::RuleSet,
-    // TODO: scores before this round (do we need to help somebody not lose?)
+    pub scores_before_round: Vec<i32>,
     pub hand: Vec<Card>,
     pub direction: u32,
     pub num_cards: u32,
 }
 
-pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
+// Returns the estimated probability of the player at `player_index` eventually
+// winning the match.
+pub fn match_equity_for_scores(scores: &[i32], max_score: u32, player_index: usize) -> f64 {
+    assert!(scores.len() >= 2);
+    assert!(player_index < scores.len());
+    if scores.iter().any(|&s| s >= (max_score as i32)) {
+        let min_score = *scores.iter().min().unwrap();
+        if scores[player_index] > min_score {
+            return 0.0;
+        }
+        // An N-way tie for first has an equity of 1/N.
+        let num_winners = scores.iter().filter(|&&s| s == min_score).count();
+        return 1.0 / (num_winners as f64);
+    }
+    // Approximate the probability as (player distance to max) / (sum of all distances to max).
+    let mut total_dist = 0u32;
+    for score in scores.iter() {
+        total_dist += ((max_score as i32) - score) as u32;
+    }
+    return (((max_score as i32) - scores[player_index]) as f64) / (total_dist as f64);
+}
+
+pub fn choose_cards_to_pass_random(req: &CardsToPassRequest) -> Vec<Card> {
     // TODO: Make this real.
     return req.hand[0..(req.num_cards as usize)].to_vec();
+}
+
+pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
+    let result: Vec<Card> = Vec::new();
+    let mut suit_ranks: HashMap<Suit, Vec<Rank>> = HashMap::new();
+    for suit in vec![Suit::Spades, Suit::Hearts, Suit::Diamonds, Suit::Clubs] {
+        suit_ranks.insert(suit, ranks_for_suit(&req.hand, suit));
+    }
+    let mut card_danger: HashMap<Card, i32> = HashMap::new();
+
+    fn danger_for_card(card: &Card, ranks: &[Rank], req: &CardsToPassRequest) -> i32 {
+        assert!(ranks.len() > 0);
+        let cval = card.rank.value as i32;
+        let lowest_rank_in_suit = ranks[ranks.len() - 1].value as i32;
+        match card.suit {
+            Suit::Spades => {
+                if card.rank < Rank::QUEEN {
+                    return 0;
+                }
+                // Assuming 4 or more spades are safe, probably not true.
+                if ranks.len() >= 4 {
+                    return 0;
+                }
+                // Always pass QS.
+                if card.rank == Rank::QUEEN {
+                    return 100;
+                }
+                // If we're passing the queen right, it's ok to keep AS and KS
+                // because we'll be able to safely play them (as long as we
+                // have a lower spade).
+                let passing_right = ((req.direction as usize) == req.rules.num_players - 1);
+                let has_queen = ranks.contains(&Rank::QUEEN);
+                let has_low_spade = (ranks[ranks.len() - 1] < Rank::QUEEN);
+                return (if passing_right && has_queen && has_low_spade {cval - 5} else {100});
+            }
+            Suit::Hearts => {
+                return cval + lowest_rank_in_suit;
+            }
+            Suit::Diamonds => {
+                return cval + lowest_rank_in_suit;
+            }
+            Suit::Clubs => {
+                // 2C is "higher" than AC for purposes of passing.
+                // TODO: We probably want to pass AC less often because winning
+                // the first trick can be helpful and doesn't risk points.
+                let adj_rank = (if cval == 2 {14} else {cval - 1});
+                if lowest_rank_in_suit == 2 {
+                    // Probably pass singleton 2C.
+                    if ranks.len() == 1 {
+                        return 50;
+                    }
+                    let second_lowest_club = ranks[ranks.len() - 2].value as i32;
+                    return adj_rank + second_lowest_club;
+                }
+                else {
+                    return adj_rank + lowest_rank_in_suit - 1;
+                }
+            }
+        }
+    }
+    for &c in req.hand.iter() {
+        card_danger.insert(c, danger_for_card(&c, suit_ranks.get(&c.suit).unwrap(), req));
+    }
+    let mut sorted_cards: Vec<Card> = req.hand.clone();
+    sorted_cards.sort_by_key(|c| -card_danger.get(c).unwrap());
+    return sorted_cards[0..(req.num_cards as usize)].to_vec();
 }
 
 impl CardToPlayRequest {
     pub fn from_round(round: &hearts::Round) -> CardToPlayRequest {
         return CardToPlayRequest {
             rules: round.rules.clone(),
+            scores_before_round: round.initial_scores.clone(),
             hand: round.current_player().hand.clone(),
             prev_tricks: round.prev_tricks.clone(),
             current_trick: round.current_trick.clone(),
@@ -236,16 +326,16 @@ fn do_rollout(round: &mut hearts::Round, strategy: &CardToPlayStrategy, mut rng:
     }
 }
 
-fn min_index<T: PartialOrd>(vals: &[T]) -> usize {
-    let mut min = &vals[0];
-    let mut min_index: usize = 0;
+fn max_index<T: PartialOrd>(vals: &[T]) -> usize {
+    let mut max = &vals[0];
+    let mut max_index: usize = 0;
     for i in 1..vals.len() {
-        if vals[i] < *min {
-            min = &vals[i];
-            min_index = i;
+        if vals[i] > *max {
+            max = &vals[i];
+            max_index = i;
         }
     }
-    return min_index;
+    return max_index;
 }
 
 fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionRequest {
@@ -340,6 +430,7 @@ fn possible_round(cc_req: &CardToPlayRequest, dist_req: &CardDistributionRequest
     return Some(hearts::Round {
         rules: cc_req.rules.clone(),
         players: result_players,
+        initial_scores: cc_req.scores_before_round.clone(),
         current_trick: cc_req.current_trick.clone(),
         prev_tricks: cc_req.prev_tricks.clone(),
         status: hearts::RoundStatus::Playing,
@@ -360,9 +451,8 @@ pub fn choose_card_monte_carlo(
         return legal_plays[0];
     }
     let pnum = req.current_player_index();
-    // TODO: keep track of predicted points for all players, for overall match equity.
-    let mut total_scores_per_play: Vec<i64> = Vec::new();
-    total_scores_per_play.resize(legal_plays.len(), 0);
+    let mut equity_per_play: Vec<f64> = Vec::new();
+    equity_per_play.resize(legal_plays.len(), 0.0);
 
     /*
     print!("P{} options: ", pnum);
@@ -387,14 +477,19 @@ pub fn choose_card_monte_carlo(
             for _r in 0..mc_params.rollouts_per_hand {
                 let mut rh = hypo_copy.clone();
                 do_rollout(&mut rh, &rollout_strategy, &mut rng);
-                let points = rh.points_taken()[pnum as usize];
-                total_scores_per_play[ci] += (points - cur_points) as i64;
+                let round_points = rh.points_taken();
+                let mut scores_after_round = req.scores_before_round.clone();
+                for p in 0..req.rules.num_players {
+                    scores_after_round[p] += round_points[p];
+                }
+
+                equity_per_play[ci] += match_equity_for_scores(
+                    &scores_after_round, req.rules.point_limit, pnum);
             }
         }
     }
-
-    // println!("MC scores: {:?}", total_scores_per_play);
-    return legal_plays[min_index(&total_scores_per_play)];
+    // println!("MC equities: {:?}", equity_per_play);
+    return legal_plays[max_index(&equity_per_play)];
 }
 
 
@@ -402,11 +497,79 @@ pub fn choose_card_monte_carlo(
 mod test {
     use super::*;
 
-    fn c(s: &str) -> Card {
-        return Card::from(s).unwrap();
+    fn c(s: &str) -> Vec<Card> {cards_from_str(s).unwrap()}
+
+    #[test]
+    fn test_match_equity() {
+        assert_eq!(1.0, match_equity_for_scores(&vec![50, 60, 100, 60], 100, 0));
+        assert_eq!(0.0, match_equity_for_scores(&vec![50, 60, 100, 60], 100, 1));
+        assert_eq!(1.0, match_equity_for_scores(&vec![104, 103, 102, 101], 100, 3));
+        assert_eq!(0.0, match_equity_for_scores(&vec![104, 103, 102, 101], 100, 2));
+
+        assert_eq!(0.5, match_equity_for_scores(&vec![50, 60, 100, 50], 100, 3));
+        assert_eq!(0.25, match_equity_for_scores(&vec![0, 0, 0, 0], 100, 3));
+        assert_eq!(0.25, match_equity_for_scores(&vec![100, 100, 100, 100], 100, 3));
+
+        let e1 = match_equity_for_scores(&vec![50, 60, 70, 80], 100, 0);
+        let e2 = match_equity_for_scores(&vec![51, 59, 70, 80], 100, 0);
+        assert!(e2 > 0.25);
+        assert!(e1 > e2);
+
+        let e3 = match_equity_for_scores(&vec![50, 60, 70, 80], 100, 2);
+        let e4 = match_equity_for_scores(&vec![50, 60, 70, 80], 100, 3);
+        assert!(e3 < 0.25);
+        assert!(e4 < e3);
     }
 
     #[test]
-    fn test_lead_2c() {
+    fn test_pass_high_cards() {
+        let rules = hearts::RuleSet::default();
+        let req = CardsToPassRequest {
+            rules: rules.clone(),
+            scores_before_round: vec![0, 0, 0, 0],
+            hand: c("JS 5S 4S 3S 8H 5H 3H AD KD TD 7C 6C 4C"),
+            direction: 1,
+            num_cards: 3,
+        };
+        assert_eq!(choose_cards_to_pass(&req), c("AD KD TD"));
+    }
+
+    #[test]
+    fn test_pass_bad_spades() {
+        let rules = hearts::RuleSet::default();
+        let req = CardsToPassRequest {
+            rules: rules.clone(),
+            scores_before_round: vec![0, 0, 0, 0],
+            hand: c("AS QS JS AH 8H 2H 6D 5D 4D 3D 6C 5C 4C"),
+            direction: 1,
+            num_cards: 3,
+        };
+        assert_eq!(choose_cards_to_pass(&req), c("AS QS AH"));
+    }
+
+    #[test]
+    fn test_keep_spades_above_queen_passing_right() {
+        let rules = hearts::RuleSet::default();
+        let req = CardsToPassRequest {
+            rules: rules.clone(),
+            scores_before_round: vec![0, 0, 0, 0],
+            hand: c("AS QS JS AH 8H 2H 6D 5D 4D 3D 6C 5C 4C"),
+            direction: 3,
+            num_cards: 3,
+        };
+        assert_eq!(choose_cards_to_pass(&req), c("QS AH 8H"));
+    }
+
+    #[test]
+    fn pass_high_spades_right_without_queen() {
+        let rules = hearts::RuleSet::default();
+        let req = CardsToPassRequest {
+            rules: rules.clone(),
+            scores_before_round: vec![0, 0, 0, 0],
+            hand: c("AS KS JS AH 8H 2H 6D 5D 4D 3D 6C 5C 4C"),
+            direction: 3,
+            num_cards: 3,
+        };
+        assert_eq!(choose_cards_to_pass(&req), c("AS KS AH"));
     }
 }

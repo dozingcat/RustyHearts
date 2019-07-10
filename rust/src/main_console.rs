@@ -21,11 +21,13 @@ fn main() {
     let mut deck = Deck::new();
     let mut rng = thread_rng();
     let rules = hearts::RuleSet::default();
+    let mut scores: Vec<i32> = Vec::new();
+    scores.resize(rules.num_players, 0);
     let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
         0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
     deck.shuffle(&mut rng);
     let pass_dir = 1u32;
-    let mut round = hearts::Round::deal(&deck, &rules, pass_dir);
+    let mut round = hearts::Round::deal(&deck, &rules, &scores, pass_dir);
     println!("Your hand: {}", all_suit_groups(&round.players[0].hand));
     if pass_dir > 0 {
         let mut passed = false;
@@ -55,6 +57,7 @@ fn main() {
                 hand: round.players[i].hand.clone(),
                 direction: pass_dir,
                 num_cards: 3,
+                scores_before_round: scores.clone(),
             };
             let cards = hearts_ai::choose_cards_to_pass(&pass_req);
             // println!("P{} passes {}", i, symbol_str_from_cards(&cards));
