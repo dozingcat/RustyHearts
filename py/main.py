@@ -59,15 +59,6 @@ class MyApp(App):
         pass_info = PassInfo(direction=1, num_cards=3)
         self.hearts_round = Round(RuleSet(), pass_info)
         self.mode = Mode.PASSING if pass_info.direction > 0 else Mode.PLAYING
-        '''
-        if pass_info.direction > 0:
-            passed_cards = []
-            for pnum in range(self.hearts_round.rules.num_players):
-                pcards = capi.cards_to_pass(self.hearts_round, pnum)
-                print(f'Player {pnum} passes {" ".join(c.symbol_string() for c in pcards)}')
-                passed_cards.append(pcards)
-            self.hearts_round.pass_cards(passed_cards)
-        '''
         self.update_player_card_display()
         if self.mode == Mode.PLAYING:
             self.start_play()

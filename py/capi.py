@@ -34,7 +34,7 @@ def cards_to_pass(rnd: Round, player_index: int):
     arr_type = c_char * buf_len
     pass_buffer = arr_type.from_buffer(bytearray(buf_len))
     lib.cards_to_pass_from_json(req_bytes, len(req_bytes), pass_buffer, buf_len)
-    # `pass_buffer` now has byte values of 1 corresponding to legal cards to play.
+    # `pass_buffer` now has byte values of 1 corresponding to cards to pass.
     return [card for (card, passed) in zip(hand, pass_buffer) if ord(passed)]
 
 
