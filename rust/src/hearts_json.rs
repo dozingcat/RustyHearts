@@ -28,6 +28,26 @@ impl From<serde_json::error::Error> for ParseError {
     }
 }
 
+#[derive(Deserialize)]
+struct JsonCardsToPassRequest {
+    // TODO: rules
+    scores_before_round: Vec<i32>,
+    hand: String,
+    direction: u32,
+    num_cards: u32,
+}
+
+impl JsonCardsToPassRequest {
+    fn to_request(&self) -> Result<hearts_ai::CardsToPassRequest, CardError> {
+        return Ok(hearts_ai::CardsToPassRequest {
+            rules: hearts::RuleSet::default(),
+            scores_before_round: self.scores_before_round.clone(),
+            hand: cards_from_str(&self.hand)?,
+            direction: self.direction,
+            num_cards: self.num_cards,
+        });
+    }
+}
 
 #[derive(Deserialize)]
 struct JsonTrick {
@@ -115,6 +135,11 @@ impl JsonTrickHistory {
     }
 }
 
+pub fn parse_cards_to_pass_request(s: &str) -> Result<hearts_ai::CardsToPassRequest, ParseError> {
+    let req: JsonCardsToPassRequest = serde_json::from_str(s)?;
+    return Ok(req.to_request()?);
+}
+
 pub fn parse_card_to_play_request(s: &str) -> Result<hearts_ai::CardToPlayRequest, ParseError> {
     let req: JsonCardToPlayRequest = serde_json::from_str(s)?;
     return Ok(req.to_request()?);
@@ -131,7 +156,20 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_parse_request() {
+    fn test_parse_pass_request() {
+        let req = parse_cards_to_pass_request(r#"
+            {
+                "scores_before_round": [30, 10, 20, 40],
+                "hand": "2C 8D AS QD",
+                "direction": 1,
+                "num_cards": 3
+            }
+        "#).unwrap();
+        assert_eq!(req.hand.len(), 4);
+    }
+
+    #[test]
+    fn test_parse_play_request() {
         let req = parse_card_to_play_request(r#"
             {
                 "scores_before_round": [30, 10, 20, 40],

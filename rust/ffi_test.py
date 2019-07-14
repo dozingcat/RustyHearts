@@ -6,6 +6,34 @@ import sys
 
 lib = cdll.LoadLibrary('target/release/libhearts.dylib')
 
+def choose_cards_to_pass(req):
+    cards = req['hand'].split()
+    req_bytes = json.dumps(req).encode('utf-8')
+
+    buf_len = 13
+    char_array_type = c_char * buf_len
+    pass_buffer = char_array_type.from_buffer(bytearray(buf_len))
+    lib.cards_to_pass_from_json(req_bytes, len(req_bytes), pass_buffer, buf_len)
+    # `pass_buffer` now has byte values of 1 corresponding to legal cards to play.
+    passed_cards = [card for (card, passed) in zip(cards, pass_buffer) if ord(passed)]
+    print(f'Cards to pass: {passed_cards}')
+
+choose_cards_to_pass({
+    "scores_before_round": [0, 0, 0, 0],
+    "hand": "AS QS JS AH 8H 2H 6D 5D 4D 3D 6C 5C 4C",
+    "direction": 1,
+    "num_cards": 3,
+})
+
+# Don't need to pass AS right when we pass QS.
+choose_cards_to_pass({
+    "scores_before_round": [0, 0, 0, 0],
+    "hand": "AS QS JS AH 8H 2H 6D 5D 4D 3D 6C 5C 4C",
+    "direction": 3,
+    "num_cards": 3,
+})
+
+
 def choose_card_to_play(req):
     cards = req['hand'].split()
     req_bytes = json.dumps(req).encode('utf-8')
@@ -14,7 +42,7 @@ def choose_card_to_play(req):
     char_array_type = c_char * buf_len
     legal_play_buffer = char_array_type.from_buffer(bytearray(buf_len))
     lib.legal_plays_from_json(req_bytes, len(req_bytes), legal_play_buffer, buf_len)
-    # `legal_cards` now has byte values of 1 corresponding to legal cards to play.
+    # `legal_play_buffer` now has byte values of 1 corresponding to legal cards to play.
     legal_cards = [card for (card, legal) in zip(cards, legal_play_buffer) if ord(legal)]
     print(f'Legal cards: {legal_cards}')
 
