@@ -63,7 +63,6 @@ pub fn match_equity_for_scores(scores: &[i32], max_score: u32, player_index: usi
 }
 
 pub fn choose_cards_to_pass_random(req: &CardsToPassRequest) -> Vec<Card> {
-    // TODO: Make this real.
     return req.hand[0..(req.num_cards as usize)].to_vec();
 }
 

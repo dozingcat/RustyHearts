@@ -14,7 +14,7 @@ use rand::thread_rng;
 
 use card::*;
 use hearts_ai::MonteCarloParams;
-use hearts_ai::{CardToPlayRequest, CardToPlayStrategy};
+use hearts_ai::{CardsToPassRequest, CardToPlayRequest, CardToPlayStrategy};
 
 /* Example: paste to stdin:
 {
@@ -44,9 +44,34 @@ fn string_from_ptr(s: *const u8, len: u32) -> String {
     return String::from_utf8(bytes.to_vec()).unwrap();
 }
 
+fn cards_to_pass_req_from_json(s: *const u8, len: u32) -> CardsToPassRequest {
+    let r_str = string_from_ptr(s, len);
+    return hearts_json::parse_cards_to_pass_request(&r_str).unwrap();
+}
+
 fn card_to_play_req_from_json(s: *const u8, len: u32) -> CardToPlayRequest {
     let r_str = string_from_ptr(s, len);
     return hearts_json::parse_card_to_play_request(&r_str).unwrap();
+}
+
+// Parses `len` bytes of `s` as a JSON-encoded CardsToPassRequest.
+// Determines the best cards to pass, and for each card at index i in the hand,
+// writes 1 to `pass_out[i]` if the card should be passed and 0 if not.
+// The size of `pass_out` must be at least the number of cards in the hand.
+// See ffi_test.py for an example of how to call.
+#[no_mangle]
+pub extern fn cards_to_pass_from_json(s: *const u8, len: u32, pass_out: *mut u8, out_len: u32) {
+    let req = unsafe {cards_to_pass_req_from_json(s, len)};
+    let cards_to_pass = hearts_ai::choose_cards_to_pass(&req);
+    if req.hand.len() > (out_len as usize) {
+        panic!("`out_len` is {} but hand has {} cards", out_len, req.hand.len());
+    }
+    for (i, card) in req.hand.iter().enumerate() {
+        let val: u8 = if cards_to_pass.contains(card) {1} else {0};
+        unsafe {
+            std::ptr::write_unaligned(pass_out.offset(i as isize), val);
+        }
+    }
 }
 
 // Parses `len` bytes of `s` as a JSON-encoded CardToPlayRequest.
@@ -67,7 +92,7 @@ pub extern fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
 
 // Parses `len` bytes of `s` as a JSON-encoded CardToPlayRequest.
 // Determines the legal cards to play for the hand in the request, and for each
-// card at index i in the hand writes a 1 to `legal_out[i]` if the card is legal
+// card at index i in the hand writes 1 to `legal_out[i]` if the card is legal
 // to play and writes 0 if not. The size of `legal_out` must be at least the
 // number of cards in the hand.
 // See ffi_test.py for an example of how to call.
