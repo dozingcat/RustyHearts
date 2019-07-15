@@ -24,7 +24,7 @@ def cards_to_pass(rnd: Round, player_index: int):
         return rnd.current_player().hand[:rnd.pass_info.num_cards]
     hand = rnd.players[player_index].hand
     req = {
-        'scores_before_round': [0] * rnd.rules.num_players,
+        'scores_before_round': rnd.scores_before_round,
         'hand': serialize_cards(hand),
         'direction': rnd.pass_info.direction,
         'num_cards': rnd.pass_info.num_cards,
@@ -41,7 +41,7 @@ def cards_to_pass(rnd: Round, player_index: int):
 def json_bytes_for_round(rnd: Round):
     p = rnd.current_player()
     r = {
-        'scores_before_round': [0] * rnd.rules.num_players,
+        'scores_before_round': rnd.scores_before_round,
         'hand': serialize_cards(p.hand),
         'prev_tricks': [serialize_trick(t) for t in rnd.prev_tricks],
         'current_trick': serialize_trick(rnd.current_trick),

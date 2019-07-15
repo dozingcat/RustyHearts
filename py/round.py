@@ -42,9 +42,10 @@ class PassInfo:
     num_cards: int
 
 class Round:
-    def __init__(self, rules, pass_info, deck=None):
+    def __init__(self, rules, pass_info, scores, deck=None):
         self.rules = rules
         self.pass_info = pass_info
+        self.scores_before_round = scores[:]
         # Could remove any cards specified in rules.removed_cards
         if deck is None:
             deck = Deck()
