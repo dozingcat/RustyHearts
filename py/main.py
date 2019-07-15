@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from enum import Enum, unique
+from typing import Iterable, List
 
 import kivy
 from kivy.app import App
@@ -30,7 +31,7 @@ class Mode(Enum):
     PLAYING = 2
 
 
-def sorted_cards_for_display(cards):
+def sorted_cards_for_display(cards: Iterable[Card]):
     sc = []
     for suit in [Suit.SPADES, Suit.HEARTS, Suit.CLUBS, Suit.DIAMONDS]:
         cards_in_suit = [c for c in cards if c.suit == suit]
@@ -43,6 +44,38 @@ def card_image_path(c: Card):
     return f'images/cards/{c.ascii_string()}.png'
 
 
+def pass_info_sequence(num_players: int, num_cards: int):
+    while True:
+        yield PassInfo(direction=1, num_cards=num_cards)
+        yield PassInfo(direction=num_players - 1, num_cards=num_cards)
+        for d in range(2, num_players - 1):
+            yield PassInfo(direction=d, num_cards=num_cards)
+        yield PassInfo(direction=0, num_cards=0)
+
+
+class Match:
+    def __init__(self, rules: RuleSet, num_players=4, point_limit=100):
+        self.rules = rules
+        self.num_players = num_players
+        self.point_limit = point_limit
+        self.scores = [0] * num_players
+        self.score_history = []
+        self.pass_info_seq = pass_info_sequence(num_players, 3)
+
+    def next_round(self):
+        return Round(self.rules, next(self.pass_info_seq), self.scores)
+
+    def record_round_scores(self, round_scores: List[int]):
+        self.score_history.append(round_scores[:])
+        self.scores = [s1 + s2 for s1, s2 in zip(self.scores, round_scores)]
+
+    def winners(self):
+        if max(self.scores) < self.point_limit:
+            return []
+        best = min(self.scores)
+        return [i for i, s in enumerate(self.scores) if s == best]
+
+
 class MyApp(App):
     def build(self):
         self.top_box = BoxLayout(orientation='vertical')
@@ -52,15 +85,18 @@ class MyApp(App):
         self.top_box.add_widget(self.cards_layout)
         self.mode = Mode.NOT_STARTED
         self.cards_to_pass = set()
+        self.match = Match(RuleSet())
         Clock.schedule_once(lambda dt: self.start_game(), 0)
         return self.top_box
 
     def start_game(self):
-        pass_info = PassInfo(direction=1, num_cards=3)
-        self.hearts_round = Round(RuleSet(), pass_info)
-        self.mode = Mode.PASSING if pass_info.direction > 0 else Mode.PLAYING
+        self.hearts_round = self.match.next_round()
+        self.mode = Mode.PASSING if self.hearts_round.pass_info.direction > 0 else Mode.PLAYING
+        self.cards_to_pass = set()
         self.update_player_card_display()
-        if self.mode == Mode.PLAYING:
+        if self.mode == Mode.PASSING:
+            print(f'Pass direction={self.hearts_round.pass_info.direction}')
+        elif self.mode == Mode.PLAYING:
             self.start_play()
 
     def start_play(self):
@@ -85,7 +121,19 @@ class MyApp(App):
 
     def do_round_finished(self):
         print('Round over')
-        print(f'Final points: {capi.points_taken(self.hearts_round)}')
+        round_scores = capi.points_taken(self.hearts_round)
+        self.match.record_round_scores(round_scores)
+        print(f'Round points: {round_scores}')
+        print(f'Total points: {self.match.scores}')
+        winners = self.match.winners()
+        if winners:
+            self.do_match_over(winners)
+        else:
+            Clock.schedule_once(lambda dt: self.start_game(), 3)
+
+    def do_match_over(self, winners: List[int]):
+        print(f'Winners: {winners}')
+        self.match = Match(RuleSet())
         Clock.schedule_once(lambda dt: self.start_game(), 3)
 
     def handle_next_play(self):
