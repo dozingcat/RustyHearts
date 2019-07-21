@@ -6,6 +6,7 @@ from typing import Iterable, List
 import kivy
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.core.window import Window
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.button import Button
 from kivy.uix.image import Image
@@ -25,6 +26,9 @@ class ImageButton(ButtonBehavior, Image):
     pass
 
 
+CARD_WIDTH_OVER_HEIGHT = 500.0 / 726
+
+
 class Mode(Enum):
     NOT_STARTED = 0
     PASSING = 1
@@ -42,6 +46,10 @@ def sorted_cards_for_display(cards: Iterable[Card]):
 
 def card_image_path(c: Card):
     return f'images/cards/{c.ascii_string()}.png'
+
+
+def black_card_image_path():
+    return 'images/cards/black.png'
 
 
 def pass_info_sequence(num_players: int, num_cards: int):
@@ -78,26 +86,27 @@ class Match:
 
 class MyApp(App):
     def build(self):
-        self.top_box = BoxLayout(orientation='vertical')
-        self.trick_layout = FloatLayout(size_hint=(1, 0.8))
-        self.top_box.add_widget(self.trick_layout)
-        self.cards_layout = BoxLayout(orientation='horizontal', spacing=10, size_hint=(1, 0.2))
-        self.top_box.add_widget(self.cards_layout)
+        self.layout = FloatLayout()
         self.mode = Mode.NOT_STARTED
         self.cards_to_pass = set()
+        self.dimmed_cards = []
         self.match = Match(RuleSet())
         Clock.schedule_once(lambda dt: self.start_game(), 0)
-        return self.top_box
+        Window.on_resize = lambda *args: self.render()
+        return self.layout
 
     def start_game(self):
         self.hearts_round = self.match.next_round()
         self.mode = Mode.PASSING if self.hearts_round.pass_info.direction > 0 else Mode.PLAYING
         self.cards_to_pass = set()
-        self.update_player_card_display()
+        self.render()
         if self.mode == Mode.PASSING:
             print(f'Pass direction={self.hearts_round.pass_info.direction}')
         elif self.mode == Mode.PLAYING:
             self.start_play()
+
+    def player(self):
+        return self.hearts_round.players[0]
 
     def start_play(self):
         self.hearts_round.start_play()
@@ -107,7 +116,7 @@ class MyApp(App):
 
     def play_card(self, card: Card):
         self.hearts_round.play_card(card)
-        self.update_trick_cards_display()
+        self.render()
         if self.hearts_round.is_finished():
             self.do_round_finished()
         else:
@@ -143,7 +152,8 @@ class MyApp(App):
             pnum = self.hearts_round.current_player_index()
             if pnum == 0:
                 legal_plays = capi.legal_plays(self.hearts_round)
-                self.update_player_card_display(legal_plays)
+                self.dimmed_cards = set(self.player().hand) - set(legal_plays)
+                self.render()
             if pnum != 0:
                 lc = capi.legal_plays(self.hearts_round)
                 best = capi.best_play(self.hearts_round)
@@ -161,8 +171,8 @@ class MyApp(App):
         if len(self.cards_to_pass) == self.hearts_round.pass_info.num_cards:
             self.pass_cards(self.cards_to_pass)
         else:
-            highlight = set(self.hearts_round.players[0].hand) - self.cards_to_pass
-            self.update_player_card_display(highlight)
+            self.dimmed_cards = self.cards_to_pass
+            self.render()
 
     def pass_cards(self, cards):
         passed_cards = [list(self.cards_to_pass)]
@@ -171,36 +181,59 @@ class MyApp(App):
             print(f'Player {pnum} passes {" ".join(c.symbol_string() for c in pcards)}')
             passed_cards.append(pcards)
         self.hearts_round.pass_cards(passed_cards)
-        self.update_player_card_display(self.hearts_round.players[0].received_cards)
+        self.dimmed_cards = set(self.player().hand) - set(self.player().received_cards)
+        self.render()
         self.mode = Mode.PLAYING
         Clock.schedule_once(lambda dt: self.start_play(), 1.5)
 
-    def update_player_card_display(self, highlight_cards=None):
-        self.cards_layout.clear_widgets()
-        for c in sorted_cards_for_display(self.hearts_round.players[0].hand):
-            img_path = card_image_path(c)
-            img = ImageButton(source=img_path)
-            img.opacity = 1.0 if (highlight_cards is None or c in highlight_cards) else 0.3
-            img.bind(on_press=lambda b, c=c: self.handle_image_click(c))
-            self.cards_layout.add_widget(img)
-
-    def update_trick_cards_display(self):
-        self.trick_layout.clear_widgets()
+    def render(self):
+        print(f'render: {self.layout.width} {self.layout.height}')
+        self.layout.clear_widgets()
+        # Current trick.
         ct = self.hearts_round.current_trick
         if ct and len(ct.cards) == 0 and len(self.hearts_round.prev_tricks) > 0:
             ct = self.hearts_round.prev_tricks[-1]
         if ct:
+            # (0, 0) puts the bottom left of the card at the bottom left of the display.
             positions = [
-                {'x': 0.4, 'y': 0.1},
-                {'x': 0.1, 'y': 0.4},
+                {'x': 0.4, 'y': 0.3},
+                {'x': 0.1, 'y': 0.5},
                 {'x': 0.4, 'y': 0.7},
-                {'x': 0.7, 'y': 0.4},
+                {'x': 0.7, 'y': 0.5},
             ]
             for i, card in enumerate(ct.cards):
                 img_path = card_image_path(card)
                 pnum = (ct.leader + i) % self.hearts_round.rules.num_players
                 img = ImageButton(source=img_path, pos_hint=positions[pnum], size_hint=(0.2, 0.2))
-                self.trick_layout.add_widget(img)
+                self.layout.add_widget(img)
+        # Player's hand.
+        hand = sorted_cards_for_display(self.hearts_round.players[0].hand)
+        height_frac = 0.2
+        height_px = height_frac * self.layout.height
+        width_px = height_px * CARD_WIDTH_OVER_HEIGHT
+        width_frac = width_px / self.layout.width
+        x_start = 0.05
+        x_end = 0.95
+        x_incr = (x_end - x_start - width_px / self.layout.width) / (len(hand) - 1)
+        # If not enough of each card's horizontal portion is visible, shrink so it is.
+        if x_incr < width_frac / 4:
+            shrink_ratio = x_incr * 4 / width_frac
+            height_frac *= shrink_ratio
+            width_frac *= shrink_ratio
+            width_px *= shrink_ratio
+            x_incr = (x_end - x_start - width_px / self.layout.width) / (len(hand) - 1)
+
+        size = (width_frac, height_frac)
+        for i, c in enumerate(hand):
+            x = (0.5 - width_frac) if len(hand) == 1 else (x_start + i * x_incr)
+            pos = {'x': x, 'y': 0.05}
+            img_path = card_image_path(c)
+            black = Image(source=black_card_image_path(), size_hint=size, pos_hint=pos)
+            self.layout.add_widget(black)
+            img = ImageButton(source=img_path, size_hint=size, pos_hint=pos)
+            img.opacity = 0.3 if c in self.dimmed_cards else 1.0
+            img.bind(on_press=lambda b, c=c: self.handle_image_click(c))
+            self.layout.add_widget(img)
 
     def handle_image_click(self, card: Card):
         print(f'Click: {card.symbol_string()}')
@@ -211,8 +244,8 @@ class MyApp(App):
             if self.hearts_round.current_player_index() == 0:
                 if card in legal:
                     self.play_card(card)
-                    self.update_player_card_display()
-                    self.update_trick_cards_display()
+                    self.highlighted_cards = []
+                    self.render()
                 else:
                     print(f'Illegal play!')
         return True
