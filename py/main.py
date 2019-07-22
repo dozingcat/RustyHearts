@@ -214,14 +214,14 @@ class MyApp(App):
         width_frac = width_px / self.layout.width
         x_start = 0.05
         x_end = 0.95
-        x_incr = (x_end - x_start - width_px / self.layout.width) / (len(hand) - 1)
+        x_incr = (x_end - x_start - width_px / self.layout.width) / max(1, len(hand) - 1)
         # If not enough of each card's horizontal portion is visible, shrink so it is.
         if x_incr < width_frac / 4:
             shrink_ratio = x_incr * 4 / width_frac
             height_frac *= shrink_ratio
             width_frac *= shrink_ratio
             width_px *= shrink_ratio
-            x_incr = (x_end - x_start - width_px / self.layout.width) / (len(hand) - 1)
+            x_incr = (x_end - x_start - width_px / self.layout.width) / max(1, len(hand) - 1)
 
         size = (width_frac, height_frac)
         for i, c in enumerate(hand):

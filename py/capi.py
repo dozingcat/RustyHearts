@@ -3,9 +3,22 @@ import json
 
 from round import Round
 
-# FIXME: Get the right shared library for the platform.
-# lib = None
-lib = cdll.LoadLibrary('../rust/target/release/libhearts.dylib')
+def load_shared_lib():
+    paths = [
+        '../rust/target/release/libhearts.dylib',
+        '../rust/target/release/libhearts.so',
+        'lib/libhearts_arm64.so',
+    ]
+    for path in paths:
+        try:
+            lib = cdll.LoadLibrary(path)
+            return lib
+        except OSError:
+            pass
+    print('Unable to load hearts shared library')
+    return None
+
+lib = load_shared_lib()
 
 
 def serialize_cards(cards):
