@@ -1,0 +1,2 @@
+buildozer==0.39
+kivy==1.11.1
