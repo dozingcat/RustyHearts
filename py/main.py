@@ -240,14 +240,15 @@ class MyApp(App):
         if self.mode == Mode.PASSING:
             self.set_or_unset_card_to_pass(card)
         elif self.mode == Mode.PLAYING:
-            legal = capi.legal_plays(self.hearts_round)
-            if self.hearts_round.current_player_index() == 0:
-                if card in legal:
-                    self.play_card(card)
-                    self.highlighted_cards = []
-                    self.render()
-                else:
-                    print(f'Illegal play!')
+            if self.hearts_round.current_trick:
+                legal = capi.legal_plays(self.hearts_round)
+                if self.hearts_round.current_player_index() == 0:
+                    if card in legal:
+                        self.play_card(card)
+                        self.highlighted_cards = []
+                        self.render()
+                    else:
+                        print(f'Illegal play!')
         return True
 
 if __name__ == '__main__':
