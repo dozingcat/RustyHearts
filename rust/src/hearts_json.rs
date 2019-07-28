@@ -116,7 +116,7 @@ pub struct TrickHistory {
 
 impl TrickHistory {
     pub fn points_taken(&self) -> Vec<i32> {
-        return hearts::points_taken(&self.tricks, &self.rules);
+        return hearts::points_for_tricks(&self.tricks, &self.rules);
     }
 }
 

@@ -461,7 +461,7 @@ pub fn choose_card_monte_carlo(
     println!("");
     */
 
-    let cur_points = hearts::points_taken(&req.prev_tricks, &req.rules)[pnum as usize];
+    let cur_points = hearts::points_for_tricks(&req.prev_tricks, &req.rules)[pnum as usize];
     let dist_req = make_card_distribution_req(&req);
     for _s in 0..mc_params.num_hands {
         let maybe_hypo_round = possible_round(req, &dist_req, &mut rng);

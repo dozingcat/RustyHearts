@@ -13,9 +13,7 @@ use card::*;
 use hearts_ai::MonteCarloParams;
 use hearts_ai::CardToPlayStrategy;
 
-// TODO:
-// pass cards
-// match with multiple rounds to 100 points
+// TODO: match with multiple rounds to 100 points
 
 fn main() {
     let mut deck = Deck::new();
