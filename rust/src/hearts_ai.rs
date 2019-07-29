@@ -473,6 +473,7 @@ pub fn choose_card_monte_carlo(
         for ci in 0..legal_plays.len() {
             let mut hypo_copy = hypo_round.clone();
             hypo_copy.play_card(&legal_plays[ci]);
+            // println!("Card: {}", legal_plays[ci].symbol_string());
             for _r in 0..mc_params.rollouts_per_hand {
                 let mut rh = hypo_copy.clone();
                 do_rollout(&mut rh, &rollout_strategy, &mut rng);
@@ -481,9 +482,9 @@ pub fn choose_card_monte_carlo(
                 for p in 0..req.rules.num_players {
                     scores_after_round[p] += round_points[p];
                 }
-
                 equity_per_play[ci] += match_equity_for_scores(
                     &scores_after_round, req.rules.point_limit, pnum);
+                // println!("Scores: {:?}", &scores_after_round);
             }
         }
     }

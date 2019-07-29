@@ -498,8 +498,5 @@ mod test {
         assert_eq!(points_for_tricks(&tricks, &rules), vec![0, -9, 13, 0]);
     }
 
-    // TODO
-    fn test_shoot_moon() {
-        let mut rules = RuleSet::default();
-    }
+    // TODO: Tests for shooting the moon.
 }
