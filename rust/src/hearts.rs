@@ -19,6 +19,13 @@ impl Player {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MoonShooting {
+    DISABLED,
+    OPPONENTS_PLUS_26,
+    // TODO: Allow option of subtracting 26 from the shooter's score.
+}
+
 #[derive(Debug, Clone)]
 pub struct RuleSet {
     pub num_players: usize,
@@ -27,6 +34,7 @@ pub struct RuleSet {
     pub points_on_first_trick: bool,
     pub queen_breaks_hearts: bool,
     pub jd_minus_10: bool,
+    pub moon_shooting: MoonShooting,
 }
 
 impl RuleSet {
@@ -38,6 +46,7 @@ impl RuleSet {
             points_on_first_trick: false,
             queen_breaks_hearts: false,
             jd_minus_10: false,
+            moon_shooting: MoonShooting::OPPONENTS_PLUS_26
         };
     }
 }
@@ -46,10 +55,10 @@ pub fn points_for_card(c: &Card, rules: &RuleSet) -> i32 {
     if c.suit == Suit::Hearts {
         return 1;
     }
-    else if c.rank == Rank::QUEEN && c.suit == Suit::Spades {
+    else if *c == QUEEN_OF_SPADES {
         return 13;
     }
-    else if rules.jd_minus_10 && c.rank == Rank::JACK && c.suit == Suit::Diamonds {
+    else if rules.jd_minus_10 && *c == JACK_OF_DIAMONDS {
         return -10;
     }
     return 0;
@@ -61,6 +70,54 @@ pub fn points_for_cards(cards: &[Card], rules: &RuleSet) -> i32 {
         points += points_for_card(&c, rules);
     }
     return points;
+}
+
+// This takes shooting the moon into account. If you don't want that, set
+// rules.moon_shooting to `MoonShooting::DISABLED`.
+pub fn points_for_tricks(tricks: &[Trick], rules: &RuleSet) -> Vec<i32> {
+    let mut points: Vec<i32> = Vec::new();
+    points.resize(rules.num_players, 0);
+    for t in tricks.iter() {
+        points[t.winner as usize] += points_for_cards(&t.cards, rules);
+    }
+    if rules.moon_shooting != MoonShooting::DISABLED {
+        if let Some(shooter) = moon_shooter(tricks, &points, rules) {
+            for p in 0..rules.num_players {
+                points[p] += if (p == shooter) {-26} else {26};
+            }
+        }
+    }
+    return points;
+}
+
+// Returns the index of the player who has taken all hearts and the queen of spades.
+fn moon_shooter(tricks: &[Trick], points: &[i32], rules: &RuleSet) -> Option<usize> {
+    fn find_shooter(pts: &[i32]) -> Option<usize> {
+        for p in 0..pts.len() {
+            if pts[p] == 26 {
+                return Some(p);
+            }
+        }
+        return None;
+    }
+
+    if rules.jd_minus_10 {
+        // Undo the -10 points for JD. We have to do this rather than just
+        // looking at the point totals because [16, 0, 0, 0] may or may not be
+        // a shoot, depending on whether one of the players with zero took the
+        // jack and ten hearts.
+        let mut points_without_jd = points.to_vec();
+        for t in tricks.iter() {
+            if t.cards.contains(&JACK_OF_DIAMONDS) {
+                points_without_jd[t.winner as usize] -= 10;
+                break;
+            }
+        }
+        return find_shooter(&points_without_jd);
+    }
+    else {
+        return find_shooter(points);
+    }
 }
 
 pub fn highest_in_trick(cards: &[Card]) -> &Card {
@@ -146,12 +203,7 @@ impl Round {
     }
 
     pub fn points_taken(&self) -> Vec<i32> {
-        let mut points: Vec<i32> = Vec::new();
-        points.resize(self.players.len(), 0);
-        for t in self.prev_tricks.iter() {
-            points[t.winner as usize] += points_for_cards(&t.cards, &self.rules);
-        }
-        return points;
+        return points_for_tricks(&self.prev_tricks, &self.rules);
     }
 
     pub fn legal_plays(&self) -> Vec<Card> {
@@ -277,15 +329,6 @@ fn are_hearts_broken(
     return false;
 }
 
-pub fn points_taken(tricks: &[Trick], rules: &RuleSet) -> Vec<i32> {
-    let mut points: Vec<i32> = Vec::new();
-    points.resize(rules.num_players, 0);
-    for t in tricks.iter() {
-        points[t.winner as usize] += points_for_cards(&t.cards, rules);
-    }
-    return points;
-}
-
 pub fn legal_plays(hand: &[Card],
                    current_trick: &TrickInProgress,
                    prev_tricks: &[Trick],
@@ -358,24 +401,20 @@ mod test {
 
     fn c(s: &str) -> Vec<Card> {cards_from_str(s).unwrap()}
 
+    fn make_trick(leader: usize, cards: &str, winner: usize) -> Trick {
+        return Trick {leader: leader, cards: c(cards), winner: winner};
+    }
+
     #[test]
     fn test_possible_leads() {
         let rules = RuleSet::default();
         let hand = c("AS QH 4C");
         let cur_trick = TrickInProgress::new(0);
 
-        let prev_tricks_no_hearts = vec![Trick {
-            leader: 0,
-            cards: c("8S 7S 6S 5S"),
-            winner: 0,
-        }];
+        let prev_tricks_no_hearts = vec![make_trick(0, "8S 7S 6S 5S", 0)];
         assert_eq!(legal_plays(&hand, &cur_trick, &prev_tricks_no_hearts, &rules), c("AS 4C"));
 
-        let prev_tricks_hearts = vec![Trick {
-            leader: 0,
-            cards: c("8S 7S KH 5S"),
-            winner: 0,
-        }];
+        let prev_tricks_hearts = vec![make_trick(0, "8S 7S KH 5S", 0)];
         assert_eq!(legal_plays(&hand, &cur_trick, &prev_tricks_hearts, &rules), c("AS QH 4C"));
     }
 
@@ -444,4 +483,20 @@ mod test {
         assert_eq!(trick_winner_index(&c("9D TD JC QS")), 1);
         assert_eq!(trick_winner_index(&c("9D TH JC QS")), 0);
     }
+
+    #[test]
+    fn test_trick_points() {
+        let mut rules = RuleSet::default();
+        let tricks = vec![
+            make_trick(0, "2C AC KC QC", 1),
+            make_trick(1, "3D 6D QS 5D", 2),
+            make_trick(2, "4D JD AH KD", 1),
+        ];
+        assert_eq!(points_for_tricks(&tricks, &rules), vec![0, 1, 13, 0]);
+
+        rules.jd_minus_10 = true;
+        assert_eq!(points_for_tricks(&tricks, &rules), vec![0, -9, 13, 0]);
+    }
+
+    // TODO: Tests for shooting the moon.
 }
