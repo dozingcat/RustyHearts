@@ -33,6 +33,8 @@ class Mode(Enum):
     NOT_STARTED = 0
     PASSING = 1
     PLAYING = 2
+    ROUND_FINISHED = 3
+    MATCH_FINISHED = 4
 
 
 def sorted_cards_for_display(cards: Iterable[Card]):
@@ -59,6 +61,20 @@ def pass_info_sequence(num_players: int, num_cards: int):
         for d in range(2, num_players - 1):
             yield PassInfo(direction=d, num_cards=num_cards)
         yield PassInfo(direction=0, num_cards=0)
+
+
+def passing_text(round: Round):
+    pi = round.pass_info
+    if pi.direction == 0 or pi.num_cards == 0:
+        return ''
+    cstr = 'card' if pi.num_cards == 1 else 'cards'
+    if pi.direction == 1:
+        return f'Pass {pi.num_cards} {cstr} left'
+    if pi.direction == round.rules.num_players - 1:
+        return f'Pass {pi.num_cards} {cstr} right'
+    if pi.direction == 2 and round.rules.num_players == 4:
+        return f'Pass {pi.num_cards} {cstr} across'
+    return f'Pass {pi.num_cards} {cstr} {pi.direction} to the left'
 
 
 class Match:
@@ -138,10 +154,14 @@ class MyApp(App):
         if winners:
             self.do_match_over(winners)
         else:
+            self.mode = Mode.ROUND_FINISHED
+            self.render()
             Clock.schedule_once(lambda dt: self.start_game(), 3)
 
     def do_match_over(self, winners: List[int]):
         print(f'Winners: {winners}')
+        self.mode = Mode.MATCH_FINISHED
+        self.render()
         self.match = Match(RuleSet())
         Clock.schedule_once(lambda dt: self.start_game(), 3)
 
@@ -187,6 +207,7 @@ class MyApp(App):
         Clock.schedule_once(lambda dt: self.start_play(), 1.5)
 
     def render(self):
+        # TODO: Break this up.
         print(f'render: {self.layout.width} {self.layout.height}')
         self.layout.clear_widgets()
         # Current trick.
@@ -234,6 +255,32 @@ class MyApp(App):
             img.opacity = 0.3 if c in self.dimmed_cards else 1.0
             img.bind(on_press=lambda b, c=c: self.handle_image_click(c))
             self.layout.add_widget(img)
+
+        font_size = min(self.layout.width, self.layout.height) / 20
+        if self.mode == Mode.PASSING:
+            pass_label = Label(
+                text=passing_text(self.hearts_round),
+                font_size=font_size,
+                halign='center',
+                pos_hint={'x': 0, 'y': 0.5},
+                size_hint=(1.0, None))
+            self.layout.add_widget(pass_label)
+        elif self.mode == Mode.ROUND_FINISHED or self.mode == Mode.MATCH_FINISHED:
+            round_scores = capi.points_taken(self.hearts_round)
+            score_text = f'Round scores: {round_scores}\nTotal scores: {self.match.scores}'
+            winners = self.match.winners()
+            if winners:
+                if 0 in winners:
+                    score_text += '\nYou win!' if len(winners) == 1 else '\nYou tied for the win!'
+                else:
+                    score_text += '\nYou lost :('
+            score_label = Label(
+                text=score_text,
+                font_size=font_size,
+                halign='center',
+                pos_hint={'x': 0, 'y': 0.5},
+                size_hint=(1.0, None))
+            self.layout.add_widget(score_label)
 
     def handle_image_click(self, card: Card):
         print(f'Click: {card.symbol_string()}')
