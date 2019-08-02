@@ -282,12 +282,6 @@ class MyApp(App):
                 size_hint=(1.0, None))
             self.layout.add_widget(score_label)
 
-
-
-            print(f'Round points: {round_scores}')
-            print(f'Total points: {self.match.scores}')
-
-
     def handle_image_click(self, card: Card):
         print(f'Click: {card.symbol_string()}')
         if self.mode == Mode.PASSING:
