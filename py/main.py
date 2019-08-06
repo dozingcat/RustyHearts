@@ -334,16 +334,21 @@ class HeartsApp(App):
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
 
-            def make_label(text, **kwargs):
-                return Label(
-                    text=text, font_size=font_size, **kwargs)
+            def make_score_row(text, scores):
+                row_layout = BoxLayout(orientation='horizontal')
+                label = Label(text=text, font_size=font_size, size_hint=(len(scores), 1), halign='right')
+                row_layout.add_widget(label)
+                for s in scores:
+                    point_label = Label(text=str(s), font_size=font_size, halign='right')
+                    row_layout.add_widget(point_label)
+                return row_layout
 
             winners = self.finished_match.winners() if self.finished_match else []
             num_labels = 3 if winners else 2
             score_layout = BoxLayout(
                 orientation='vertical',
-                pos_hint={'x': 0.1, 'y': 0.5 - (num_labels * label_height_frac) / 2},
-                size_hint=(0.8, num_labels * label_height_frac))
+                pos_hint={'x': 0.075, 'y': 0.5 - (num_labels * label_height_frac) / 2},
+                size_hint=(0.85, num_labels * label_height_frac))
             set_round_rect_background(score_layout, [0, 0, 0, 0.5], 20)
             self.layout.add_widget(score_layout)
             if winners:
@@ -355,14 +360,8 @@ class HeartsApp(App):
                 score_layout.add_widget(result_label)
             round_scores = capi.points_taken(self.hearts_round)
             match_scores = (self.finished_match or self.match).scores
-            round_score_label = make_label(
-                f'Round score: {round_scores}',
-                halign='center')
-            match_score_label = make_label(
-                f'Total score: {match_scores}',
-                halign='center')
-            score_layout.add_widget(round_score_label)
-            score_layout.add_widget(match_score_label)
+            score_layout.add_widget(make_score_row('Round score:', round_scores))
+            score_layout.add_widget(make_score_row('Total score:', match_scores))
 
     def handle_image_click(self, card: Card):
         print(f'Click: {card.symbol_string()}')
