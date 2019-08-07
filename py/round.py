@@ -41,6 +41,7 @@ class PassInfo:
     direction: int
     num_cards: int
 
+
 class Round:
     def __init__(self, rules, pass_info, scores, deck=None):
         self.rules = rules
