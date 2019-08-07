@@ -107,8 +107,22 @@ def set_rect_background(widget, color: Iterable[float]):
             'background': Rectangle(size=widget.size)
         }
     def update(inst, value):
+        widget._commands_['background'].pos = inst.pos
         widget._commands_['background'].size = inst.size
     widget.bind(pos=update, size=update)
+
+def make_label(**kwargs):
+    '''Creates a label and binds its `text_size` to its `size`, allowing
+    alignment to work as expected. Defaults to center alignment.
+    See http://inclem.net/2014/07/05/kivy/kivy_label_text/
+    '''
+    kwargs.setdefault('halign', 'center')
+    kwargs.setdefault('valign', 'middle')
+    label = Label(**kwargs)
+    def update(inst, value):
+        label.text_size = label.size
+    label.bind(size=update)
+    return label
 
 def set_round_rect_background(widget, color: Iterable[float], radius: float):
     diam = 2 * radius
@@ -319,10 +333,9 @@ class HeartsApp(App):
             font_size = self.default_font_size()
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
-            pass_label = Label(
+            pass_label = make_label(
                 text=passing_text(self.hearts_round),
                 font_size=font_size,
-                halign='center',
                 pos_hint={'x': 0.1, 'y': 0.5 - label_height_frac / 2},
                 size_hint=(0.8, label_height_frac))
             set_round_rect_background(pass_label, [0, 0, 0, 0.5], 20)
@@ -336,19 +349,28 @@ class HeartsApp(App):
 
             def make_score_row(text, scores):
                 row_layout = BoxLayout(orientation='horizontal')
-                label = Label(text=text, font_size=font_size, size_hint=(len(scores), 1), halign='right')
+                # Spacers on left and right so text doesn't go to the edge.
+                def make_spacer():
+                    return Label(text='', size_hint=(0.2, None))
+                row_layout.add_widget(make_spacer())
+                label = make_label(
+                    text=text,
+                    font_size=font_size,
+                    size_hint=(len(scores), 1),
+                    halign='right')
                 row_layout.add_widget(label)
                 for s in scores:
-                    point_label = Label(text=str(s), font_size=font_size, halign='right')
+                    point_label = make_label(text=str(s), font_size=font_size, halign='right')
                     row_layout.add_widget(point_label)
+                row_layout.add_widget(make_spacer())
                 return row_layout
 
             winners = self.finished_match.winners() if self.finished_match else []
             num_labels = 3 if winners else 2
             score_layout = BoxLayout(
                 orientation='vertical',
-                pos_hint={'x': 0.075, 'y': 0.5 - (num_labels * label_height_frac) / 2},
-                size_hint=(0.85, num_labels * label_height_frac))
+                pos_hint={'x': 0.05, 'y': 0.5 - (num_labels * label_height_frac) / 2},
+                size_hint=(0.9, num_labels * label_height_frac))
             set_round_rect_background(score_layout, [0, 0, 0, 0.5], 20)
             self.layout.add_widget(score_layout)
             if winners:
@@ -356,7 +378,7 @@ class HeartsApp(App):
                     score_text = 'You win!' if len(winners) == 1 else 'You tied for the win!'
                 else:
                     score_text = 'You lost :('
-                result_label = make_label(score_text, halign='center')
+                result_label = make_label(text=score_text, font_size=font_size)
                 score_layout.add_widget(result_label)
             round_scores = capi.points_taken(self.hearts_round)
             match_scores = (self.finished_match or self.match).scores
