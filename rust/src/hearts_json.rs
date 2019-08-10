@@ -29,8 +29,54 @@ impl From<serde_json::error::Error> for ParseError {
 }
 
 #[derive(Deserialize)]
+struct JsonRuleSet {
+    #[serde(default = "hearts::RuleSet::default_num_players")]
+    num_players: usize,
+
+    #[serde(default)]
+    removed_cards: String,
+
+    #[serde(default = "hearts::RuleSet::default_point_limit")]
+    point_limit: u32,
+
+    #[serde(default)]
+    points_on_first_trick: bool,
+
+    #[serde(default)]
+    queen_breaks_hearts: bool,
+
+    #[serde(default)]
+    jd_minus_10: bool,
+
+    #[serde(default)]
+    shooting_disabled: bool,
+}
+
+impl JsonRuleSet {
+    fn to_rules(&self) -> Result<hearts::RuleSet, CardError> {
+        return Ok(hearts::RuleSet {
+            num_players: self.num_players,
+            removed_cards: cards_from_str(&self.removed_cards)?,
+            point_limit: self.point_limit,
+            points_on_first_trick: self.points_on_first_trick,
+            queen_breaks_hearts: self.queen_breaks_hearts,
+            jd_minus_10: self.jd_minus_10,
+            moon_shooting:
+                if self.shooting_disabled {hearts::MoonShooting::DISABLED}
+                else {hearts::MoonShooting::OPPONENTS_PLUS_26},
+        });
+    }
+
+    fn default() -> JsonRuleSet {
+        let r: JsonRuleSet = serde_json::from_str(r#"{}"#).unwrap();
+        return r;
+    }
+}
+
+#[derive(Deserialize)]
 struct JsonCardsToPassRequest {
-    // TODO: rules
+    #[serde(default = "JsonRuleSet::default")]
+    rules: JsonRuleSet,
     scores_before_round: Vec<i32>,
     hand: String,
     direction: u32,
@@ -40,7 +86,7 @@ struct JsonCardsToPassRequest {
 impl JsonCardsToPassRequest {
     fn to_request(&self) -> Result<hearts_ai::CardsToPassRequest, CardError> {
         return Ok(hearts_ai::CardsToPassRequest {
-            rules: hearts::RuleSet::default(),
+            rules: self.rules.to_rules()?,
             scores_before_round: self.scores_before_round.clone(),
             hand: cards_from_str(&self.hand)?,
             direction: self.direction,
@@ -84,7 +130,8 @@ impl JsonTrick {
 
 #[derive(Deserialize)]
 struct JsonCardToPlayRequest {
-    // TODO: rules
+    #[serde(default = "JsonRuleSet::default")]
+    rules: JsonRuleSet,
     scores_before_round: Vec<i32>,
     hand: String,
     prev_tricks: Vec<JsonTrick>,
@@ -97,7 +144,7 @@ struct JsonCardToPlayRequest {
 impl JsonCardToPlayRequest {
     fn to_request(&self) -> Result<hearts_ai::CardToPlayRequest, CardError> {
         return Ok(hearts_ai::CardToPlayRequest {
-            rules: hearts::RuleSet::default(),
+            rules: self.rules.to_rules()?,
             scores_before_round: self.scores_before_round.clone(),
             hand: cards_from_str(&self.hand)?,
             prev_tricks: JsonTrick::to_tricks(&self.prev_tricks)?,
@@ -199,5 +246,76 @@ mod test {
             }
         "#).unwrap();
         assert_eq!(history.points_taken(), vec![0, 13, 0, 2]);
+    }
+
+    #[test]
+    fn test_default_rules() {
+        let req = parse_cards_to_pass_request(r#"
+            {
+                "scores_before_round": [30, 10, 20, 40],
+                "hand": "2C 8D AS QD",
+                "direction": 1,
+                "num_cards": 3
+            }
+        "#).unwrap();
+        assert_eq!(req.rules, hearts::RuleSet::default());
+    }
+
+    #[test]
+    fn test_custom_rules() {
+        let req = parse_cards_to_pass_request(r#"
+            {
+                "rules": {
+                    "point_limit": 42,
+                    "jd_minus_10": true,
+                    "shooting_disabled": true
+                },
+                "scores_before_round": [30, 10, 20, 40],
+                "hand": "2C 8D AS QD",
+                "direction": 1,
+                "num_cards": 3
+            }
+        "#).unwrap();
+        let expected = hearts::RuleSet {
+            point_limit: 42,
+            jd_minus_10: true,
+            moon_shooting: hearts::MoonShooting::DISABLED,
+            ..Default::default()
+        };
+        assert_eq!(req.rules, expected);
+    }
+
+    #[test]
+    fn test_all_different_rules() {
+        let req = parse_cards_to_pass_request(r#"
+            {
+                "rules": {
+                    "num_players": 5,
+                    "removed_cards": "2D 3C",
+                    "point_limit": 99,
+                    "points_on_first_trick": true,
+                    "queen_breaks_hearts": true,
+                    "jd_minus_10": false,
+                    "shooting_disabled": false
+                },
+                "scores_before_round": [30, 10, 20, 40],
+                "hand": "2C 8D AS QD",
+                "direction": 1,
+                "num_cards": 3
+            }
+        "#).unwrap();
+        let expected = hearts::RuleSet {
+            num_players: 5,
+            removed_cards: vec![
+                Card::new(Rank::num(2), Suit::Diamonds),
+                Card::new(Rank::num(3), Suit::Clubs),
+            ],
+            point_limit: 99,
+            points_on_first_trick: true,
+            queen_breaks_hearts: true,
+            jd_minus_10: false,
+            moon_shooting: hearts::MoonShooting::OPPONENTS_PLUS_26,
+        };
+        assert_eq!(req.rules, expected);
     }
 }

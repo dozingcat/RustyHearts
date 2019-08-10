@@ -217,6 +217,7 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
     // If leading, play the lowest card in a random suit.
     // If last in a trick and following suit, play high if there are no points.
     // Otherwise play low if following suit, discard highest otherwise (favoring QS).
+    // TODO: Favor leading spades if QS hasn't been played and it's safe?
     let trick = &req.current_trick;
     if trick.cards.is_empty() {
         let suit = *random_from_set(&legal_suits, &mut rng);
@@ -258,9 +259,10 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
                     .unwrap();
             }
             // Avoid taking the trick if we can; if we can't play highest.
-            // TODO: If playing with JD rule, don't play it under a higher diamond.
+            // If playing with JD rule, don't play it under a higher diamond.
             let highest_nonwinner = legal_plays.iter()
                 .filter(|c| c.rank < high_card.rank)
+                .filter(|c| !(has_jd && **c == hearts::JACK_OF_DIAMONDS))
                 .max_by(|a, b| a.rank.cmp(&b.rank));
             return match highest_nonwinner {
                 Some(c) => *c,
@@ -271,13 +273,15 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
             };
         }
         else {
-            // Play just under the winner if possible.
+            // Play just under the winner if possible (but not JD if it's -10 points).
             // If we can't, play the lowest (other than QS).
             let highest_nonwinner = legal_plays.iter()
                 .filter(|c| c.rank < high_card.rank)
+                .filter(|c| !(has_jd && **c == hearts::JACK_OF_DIAMONDS))
                 .max_by(|a, b| a.rank.cmp(&b.rank));
             return match highest_nonwinner {
                 Some(c) => *c,
+                // This will play JD if possible, which is probably ok.
                 None => *legal_plays.iter()
                     .filter(|c| **c != hearts::QUEEN_OF_SPADES)
                     .min_by(|a, b| a.rank.cmp(&b.rank))
@@ -297,7 +301,10 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
                 .unwrap();
         }
         // TODO: If playing with JD rule, don't discard it.
-        return *legal_plays.iter().max_by(|a, b| a.rank.cmp(&b.rank)).unwrap();
+        return *legal_plays.iter()
+            .filter(|c| !(has_jd && **c == hearts::JACK_OF_DIAMONDS))
+            .max_by(|a, b| a.rank.cmp(&b.rank))
+            .unwrap();
     }
 }
 
@@ -492,7 +499,7 @@ pub fn choose_card_monte_carlo(
     return legal_plays[max_index(&equity_per_play)];
 }
 
-
+// Tests for what card to play are in ffi_test.py.
 #[cfg(test)]
 mod test {
     use super::*;
