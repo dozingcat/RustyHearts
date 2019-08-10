@@ -133,6 +133,39 @@ class HeartsApiTest(unittest.TestCase):
         })
         self.assertEqual(card, "AS")
 
+    def test_take_jack_of_diamonds_if_minus_10(self):
+        req = {
+            "scores_before_round": [0, 0, 0, 0],
+            "hand": "AS JS 6S AH JH 6H AD JD 3D 2D 4C 3C",
+            "prev_tricks": [{"leader": 0, "cards": "2C QC KC AC"}],
+            "current_trick": {"leader": 3, "cards": "4D 8D KH"},
+            "pass_direction": 0,
+            "passed_cards": "",
+            "received_cards": "",
+        }
+        card = choose_card_to_play(self.lib, req)
+        self.assertEqual(card, "AD")
+        # If the jack of diamonds is -10 points, we should take it.
+        req["rules"] = {"jd_minus_10": True}
+        card = choose_card_to_play(self.lib, req)
+        self.assertEqual(card, "JD")
+
+    def test_dont_expect_opponent_to_drop_jd(self):
+        req = {
+            "rules": {"jd_minus_10": True},
+            "scores_before_round": [0, 0, 0, 0],
+            "hand": "AD TD 9D 8D JS TS 9S 8S KH 4H JC TC",
+            "prev_tricks": [{"leader": 0, "cards": "2C QC KC AC"}],
+            "current_trick": {"leader": 3, "cards": ""},
+            "pass_direction": 0,
+            "passed_cards": "",
+            "received_cards": "",
+        }
+        card = choose_card_to_play(self.lib, req)
+        # Make sure that we don't model our opponents as wanting to play JD
+        # if we lead a higher diamond. A spade is the only reasonable lead.
+        self.assertIn(card, ["JS", "TS", "9S", "8S"])
+
     def test_block_shoot(self):
         # Basic shooting defense. Contrived hand:
         # P0: ♠ ♥AQT954 ♦ ♣8765432
