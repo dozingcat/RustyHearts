@@ -217,6 +217,7 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
     // If leading, play the lowest card in a random suit.
     // If last in a trick and following suit, play high if there are no points.
     // Otherwise play low if following suit, discard highest otherwise (favoring QS).
+    // TODO: Favor leading spades if QS hasn't been played and it's safe?
     let trick = &req.current_trick;
     if trick.cards.is_empty() {
         let suit = *random_from_set(&legal_suits, &mut rng);
