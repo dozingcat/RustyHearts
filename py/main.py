@@ -284,29 +284,55 @@ class HeartsApp(App):
 
     def render_hand(self):
         hand = sorted_cards_for_display(self.hearts_round.players[0].hand)
+        if self.layout.height > self.layout.width and len(hand) > 7:
+            # For an odd number of cards, the top row should have the extra card.
+            odd = (len(hand) % 2 == 1)
+            split = len(hand) // 2 + (1 if odd else 0)
+            top_cards = hand[:split]
+            bottom_cards = hand[split:]
+            if odd:
+                bottom_cards.append(None)
+            self.render_cards(top_cards, y=0.125)
+            self.render_cards(bottom_cards, y=0.05, x_offset=0.5 if odd else 0)
+        else:
+            self.render_cards(hand)
+
+    def render_cards(self, cards: List[Card], y=0.05, x_offset=0):
         height_frac = 0.2
         height_px = height_frac * self.layout.height
         width_px = height_px * CARD_WIDTH_OVER_HEIGHT
         width_frac = width_px / self.layout.width
         x_start = 0.05
         x_end = 0.95
-        x_incr = (x_end - x_start - width_px / self.layout.width) / max(1, len(hand) - 1)
-        # If not enough of each card's horizontal portion is visible, shrink so it is.
-        if x_incr < width_frac / 4:
+        x_incr = (
+            0 if len(cards) <= 1
+            else (x_end - x_start - width_px / self.layout.width) / (len(cards) - 1))
+        if 0 < x_incr < width_frac / 4:
+            # Not enough of each card's horizontal portion is visible, shrink so it is.
             shrink_ratio = x_incr * 4 / width_frac
             height_frac *= shrink_ratio
             width_frac *= shrink_ratio
             width_px *= shrink_ratio
-            x_incr = (x_end - x_start - width_px / self.layout.width) / max(1, len(hand) - 1)
+            x_incr = (x_end - x_start - width_px / self.layout.width) / (len(cards) - 1)
+        elif x_incr > width_frac:
+            # Get rid of the space between cards.
+            hand_width = len(cards) * width_frac
+            x_incr = width_frac
+            x_start = 0.5 - hand_width / 2
+            x_end = x_start + hand_width
         size = (width_frac, height_frac)
-        for i, c in enumerate(hand):
-            x = (0.5 - width_frac) if len(hand) == 1 else (x_start + i * x_incr)
-            pos = {'x': x, 'y': 0.05}
+        for i, c in enumerate(cards):
+            if c is None:
+                continue
+            x = x_start + ((i + x_offset) * x_incr)
+            pos = {'x': x, 'y': y}
             img_path = card_image_path(c)
-            black = Image(source=black_card_image_path(), size_hint=size, pos_hint=pos)
-            self.layout.add_widget(black)
+            opacity = 0.3 if c in self.dimmed_cards else 1.0
+            if opacity < 1.0:
+                black = Image(source=black_card_image_path(), size_hint=size, pos_hint=pos)
+                self.layout.add_widget(black)
             img = ImageButton(source=img_path, size_hint=size, pos_hint=pos)
-            img.opacity = 0.3 if c in self.dimmed_cards else 1.0
+            img.opacity = opacity
             img.bind(on_press=lambda b, c=c: self.handle_image_click(c))
             self.layout.add_widget(img)
 
@@ -317,10 +343,10 @@ class HeartsApp(App):
         if ct:
             # (0, 0) puts the bottom left of the card at the bottom left of the display.
             positions = [
-                {'x': 0.4, 'y': 0.3},
-                {'x': 0.1, 'y': 0.5},
-                {'x': 0.4, 'y': 0.7},
-                {'x': 0.7, 'y': 0.5},
+                {'x': 0.4, 'y': 0.35},
+                {'x': 0.1, 'y': 0.55},
+                {'x': 0.4, 'y': 0.75},
+                {'x': 0.7, 'y': 0.55},
             ]
             for i, card in enumerate(ct.cards):
                 img_path = card_image_path(card)
