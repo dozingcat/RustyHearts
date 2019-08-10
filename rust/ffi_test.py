@@ -11,8 +11,7 @@ def load_shared_lib():
     ]
     for path in paths:
         try:
-            lib = cdll.LoadLibrary(path)
-            return lib
+            return cdll.LoadLibrary(path)
         except OSError:
             pass
     raise RuntimeError('Unable to load hearts shared library')
@@ -70,6 +69,30 @@ class HeartsApiTest(unittest.TestCase):
             "num_cards": 3,
         })
         self.assertEqual(set(cards), {"QS", "AH", "8H"})
+
+    def test_dump_queen(self):
+        card = choose_card_to_play(self.lib, {
+            "scores_before_round": [0, 0, 0, 0],
+            "hand": "KS QS JS TS AH 9H 6H 3H AD KD QD JD",
+            "prev_tricks": [{"leader": 0, "cards": "2C QC KC AC"}],
+            "current_trick": {"leader": 3, "cards": "4C"},
+            "pass_direction": 0,
+            "passed_cards": "",
+            "received_cards": "",
+        })
+        self.assertIn(card, ["QS"])
+
+    def test_high_spade(self):
+        card = choose_card_to_play(self.lib, {
+            "scores_before_round": [0, 0, 0, 0],
+            "hand": "KS JS AH 9H 6H 5H 4H 3H AD KD QD 2D",
+            "prev_tricks": [{"leader": 0, "cards": "2C QC KC AC"}],
+            "current_trick": {"leader": 3, "cards": "4C"},
+            "pass_direction": 0,
+            "passed_cards": "",
+            "received_cards": "",
+        })
+        self.assertIn(card, ["KS"])
 
     def test_avoid_queen(self):
         card = choose_card_to_play(self.lib, {

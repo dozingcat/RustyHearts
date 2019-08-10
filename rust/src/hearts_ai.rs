@@ -492,7 +492,7 @@ pub fn choose_card_monte_carlo(
     return legal_plays[max_index(&equity_per_play)];
 }
 
-
+// Tests for what card to play are in ffi_test.py.
 #[cfg(test)]
 mod test {
     use super::*;

@@ -26,7 +26,7 @@ pub enum MoonShooting {
     // TODO: Allow option of subtracting 26 from the shooter's score.
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RuleSet {
     pub num_players: usize,
     pub removed_cards: Vec<Card>,
@@ -38,11 +38,16 @@ pub struct RuleSet {
 }
 
 impl RuleSet {
-    pub fn default() -> RuleSet {
-        return RuleSet {
-            num_players: 4,
+    pub fn default_num_players() -> usize {4}
+    pub fn default_point_limit() -> u32 {100}
+}
+
+impl Default for RuleSet {
+    fn default() -> RuleSet {
+        return Self {
+            num_players: RuleSet::default_num_players(),
             removed_cards: Vec::new(),
-            point_limit: 100,
+            point_limit: RuleSet::default_point_limit(),
             points_on_first_trick: false,
             queen_breaks_hearts: false,
             jd_minus_10: false,
