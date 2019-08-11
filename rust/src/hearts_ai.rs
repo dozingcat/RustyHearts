@@ -300,7 +300,7 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
                 .max_by(|a, b| a.rank.cmp(&b.rank))
                 .unwrap();
         }
-        // TODO: If playing with JD rule, don't discard it.
+        // Don't play JD if we want to take it.
         return *legal_plays.iter()
             .filter(|c| !(has_jd && **c == hearts::JACK_OF_DIAMONDS))
             .max_by(|a, b| a.rank.cmp(&b.rank))

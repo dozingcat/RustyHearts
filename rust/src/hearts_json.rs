@@ -66,8 +66,10 @@ impl JsonRuleSet {
                 else {hearts::MoonShooting::OPPONENTS_PLUS_26},
         });
     }
+}
 
-    fn default() -> JsonRuleSet {
+impl Default for JsonRuleSet {
+    fn default() -> Self {
         let r: JsonRuleSet = serde_json::from_str(r#"{}"#).unwrap();
         return r;
     }
@@ -75,7 +77,7 @@ impl JsonRuleSet {
 
 #[derive(Deserialize)]
 struct JsonCardsToPassRequest {
-    #[serde(default = "JsonRuleSet::default")]
+    #[serde(default)]
     rules: JsonRuleSet,
     scores_before_round: Vec<i32>,
     hand: String,
@@ -130,7 +132,7 @@ impl JsonTrick {
 
 #[derive(Deserialize)]
 struct JsonCardToPlayRequest {
-    #[serde(default = "JsonRuleSet::default")]
+    #[serde(default)]
     rules: JsonRuleSet,
     scores_before_round: Vec<i32>,
     hand: String,
@@ -169,14 +171,15 @@ impl TrickHistory {
 
 #[derive(Deserialize)]
 struct JsonTrickHistory {
-    // TODO: rules
+    #[serde(default)]
+    rules: JsonRuleSet,
     tricks: Vec<JsonTrick>,
 }
 
 impl JsonTrickHistory {
     fn to_history(&self) -> Result<TrickHistory, ParseError> {
         return Ok(TrickHistory {
-            rules: hearts::RuleSet::default(),
+            rules: self.rules.to_rules()?,
             tricks: JsonTrick::to_tricks(&self.tricks)?,
         });
     }
