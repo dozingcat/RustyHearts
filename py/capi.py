@@ -1,7 +1,7 @@
 from ctypes import cdll, c_char, c_int32
 import json
 
-from round import Round
+from hearts import Round, RuleSet
 
 def load_shared_lib():
     paths = [
@@ -32,11 +32,24 @@ def serialize_trick(trick):
     }
 
 
+def serialize_rules(rules: RuleSet):
+    return {
+        'num_players': rules.num_players,
+        'removed_cards': serialize_cards(rules.removed_cards),
+        'point_limit': rules.point_limit,
+        'points_on_first_trick': rules.points_on_first_trick,
+        'queen_breaks_hearts': rules.queen_breaks_hearts,
+        'jd_minus_10': rules.jd_minus_10,
+        'shooting_disabled': rules.shooting_disabled,
+    }
+
+
 def cards_to_pass(rnd: Round, player_index: int):
     if not lib:
         return rnd.current_player().hand[:rnd.pass_info.num_cards]
     hand = rnd.players[player_index].hand
     req = {
+        'rules': serialize_rules(rnd.rules),
         'scores_before_round': rnd.scores_before_round,
         'hand': serialize_cards(hand),
         'direction': rnd.pass_info.direction,
@@ -54,6 +67,7 @@ def cards_to_pass(rnd: Round, player_index: int):
 def json_bytes_for_round(rnd: Round):
     p = rnd.current_player()
     r = {
+        'rules': serialize_rules(rnd.rules),
         'scores_before_round': rnd.scores_before_round,
         'hand': serialize_cards(p.hand),
         'prev_tricks': [serialize_trick(t) for t in rnd.prev_tricks],
@@ -91,6 +105,7 @@ def points_taken(rnd: Round):
     if not lib:
         return [0] * rnd.rules.num_players
     req = {
+        'rules': serialize_rules(rnd.rules),
         'tricks': [serialize_trick(t) for t in rnd.prev_tricks],
     }
     req_bytes = json.dumps(req).encode('utf-8')

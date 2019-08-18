@@ -11,6 +11,7 @@ class RuleSet:
     points_on_first_trick: bool = False
     queen_breaks_hearts: bool = False
     jd_minus_10: bool = False
+    shooting_disabled: bool = False
 
 
 def trick_winner_index(cards: List[Card]):
@@ -40,6 +41,15 @@ class Player:
 class PassInfo:
     direction: int
     num_cards: int
+
+
+def pass_info_sequence(num_players: int, num_cards: int):
+    while True:
+        yield PassInfo(direction=1, num_cards=num_cards)
+        yield PassInfo(direction=num_players - 1, num_cards=num_cards)
+        for d in range(2, num_players - 1):
+            yield PassInfo(direction=d, num_cards=num_cards)
+        yield PassInfo(direction=0, num_cards=0)
 
 
 class Round:
@@ -109,3 +119,26 @@ class Round:
 
     def is_finished(self):
         return self.current_trick is None and len(self.prev_tricks) > 0
+
+
+class Match:
+    def __init__(self, rules: RuleSet, num_players=4, point_limit=100):
+        self.rules = rules
+        self.num_players = num_players
+        self.point_limit = point_limit
+        self.scores = [0] * num_players
+        self.score_history = []
+        self.pass_info_seq = pass_info_sequence(num_players, 3)
+
+    def next_round(self):
+        return Round(self.rules, next(self.pass_info_seq), self.scores)
+
+    def record_round_scores(self, round_scores: List[int]):
+        self.score_history.append(round_scores[:])
+        self.scores = [s1 + s2 for s1, s2 in zip(self.scores, round_scores)]
+
+    def winners(self):
+        if max(self.scores) < self.point_limit:
+            return []
+        best = min(self.scores)
+        return [i for i, s in enumerate(self.scores) if s == best]

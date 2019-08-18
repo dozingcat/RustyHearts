@@ -14,19 +14,18 @@ from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.settings import Settings
 
 import capi
 from cards import Card, Rank, Suit
-from round import PassInfo, Round, RuleSet
+from hearts import Match, Round, RuleSet
 
 # Card images from https://github.com/hayeah/playing-cards-assets, MIT licensed.
+CARD_WIDTH_OVER_HEIGHT = 500.0 / 726
 
 # https://kivy.org/doc/stable/api-kivy.uix.behaviors.html
 class ImageButton(ButtonBehavior, Image):
     pass
-
-
-CARD_WIDTH_OVER_HEIGHT = 500.0 / 726
 
 
 @unique
@@ -55,15 +54,6 @@ def black_card_image_path():
     return 'images/cards/black.png'
 
 
-def pass_info_sequence(num_players: int, num_cards: int):
-    while True:
-        yield PassInfo(direction=1, num_cards=num_cards)
-        yield PassInfo(direction=num_players - 1, num_cards=num_cards)
-        for d in range(2, num_players - 1):
-            yield PassInfo(direction=d, num_cards=num_cards)
-        yield PassInfo(direction=0, num_cards=0)
-
-
 def passing_text(round: Round):
     pi = round.pass_info
     if pi.direction == 0 or pi.num_cards == 0:
@@ -77,28 +67,6 @@ def passing_text(round: Round):
         return f'Pass {pi.num_cards} {cstr} across'
     return f'Pass {pi.num_cards} {cstr} {pi.direction} to the left'
 
-
-class Match:
-    def __init__(self, rules: RuleSet, num_players=4, point_limit=100):
-        self.rules = rules
-        self.num_players = num_players
-        self.point_limit = point_limit
-        self.scores = [0] * num_players
-        self.score_history = []
-        self.pass_info_seq = pass_info_sequence(num_players, 3)
-
-    def next_round(self):
-        return Round(self.rules, next(self.pass_info_seq), self.scores)
-
-    def record_round_scores(self, round_scores: List[int]):
-        self.score_history.append(round_scores[:])
-        self.scores = [s1 + s2 for s1, s2 in zip(self.scores, round_scores)]
-
-    def winners(self):
-        if max(self.scores) < self.point_limit:
-            return []
-        best = min(self.scores)
-        return [i for i, s in enumerate(self.scores) if s == best]
 
 def set_rect_background(widget, color: Iterable[float]):
     with widget.canvas.before:
@@ -156,14 +124,32 @@ def set_round_rect_background(widget, color: Iterable[float], radius: float):
     widget.bind(pos=update, size=update)
 
 
+def rules_from_preferences(config):
+    return RuleSet(
+        points_on_first_trick=config.getboolean('Rules', 'points_on_first_trick'),
+        queen_breaks_hearts=config.getboolean('Rules', 'queen_breaks_hearts'),
+        jd_minus_10=config.getboolean('Rules', 'jd_minus_10'),
+    )
+
+
 class HeartsApp(App):
+    def build_config(self, config):
+        config.setdefaults('Rules', {
+            'jd_minus_10': False,
+            'points_on_first_trick': False,
+            'queen_breaks_hearts': False,
+        })
+
+    def build_settings(self, settings):
+        settings.add_json_panel('Rules', self.config, 'settings.json')
+
     def build(self):
         self.layout = FloatLayout()
         set_rect_background(self.layout, [0, 0.3, 0, 1])
         self.mode = Mode.NOT_STARTED
         self.cards_to_pass = set()
         self.dimmed_cards = []
-        self.match = Match(RuleSet())
+        self.match = Match(rules_from_preferences(self.config))
         self.finished_match = None
         Clock.schedule_once(lambda dt: self.start_game(), 0)
         Window.on_resize = lambda *args: self.render()
@@ -227,7 +213,7 @@ class HeartsApp(App):
         print(f'Winners: {winners}')
         self.mode = Mode.MATCH_FINISHED
         self.finished_match = self.match
-        self.match = Match(RuleSet())
+        self.match = Match(rules_from_preferences(self.config))
         self.render()
 
     def handle_next_play(self):
@@ -307,7 +293,9 @@ class HeartsApp(App):
         x_incr = (
             0 if len(cards) <= 1
             else (x_end - x_start - width_px / self.layout.width) / (len(cards) - 1))
-        if 0 < x_incr < width_frac / 4:
+        if len(cards) == 1:
+            x_start = 0.5 - width_frac / 2
+        elif 0 < x_incr < width_frac / 4:
             # Not enough of each card's horizontal portion is visible, shrink so it is.
             shrink_ratio = x_incr * 4 / width_frac
             height_frac *= shrink_ratio
@@ -426,6 +414,7 @@ class HeartsApp(App):
                     else:
                         print(f'Illegal play!')
         return True
+
 
 if __name__ == '__main__':
     HeartsApp().run()

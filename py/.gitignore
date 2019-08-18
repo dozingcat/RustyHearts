@@ -2,3 +2,4 @@ __pycache__
 .buildozer
 bin
 lib
+hearts.ini
