@@ -1,0 +1,20 @@
+[
+    {
+        "type": "bool",
+        "title": "Jack of diamonds is -10 points",
+        "section": "Rules",
+        "key": "jd_minus_10"
+    },
+    {
+        "type": "bool",
+        "title": "Allow points on first trick",
+        "section": "Rules",
+        "key": "points_on_first_trick"
+    },
+    {
+        "type": "bool",
+        "title": "Queen of spades breaks hearts",
+        "section": "Rules",
+        "key": "queen_breaks_hearts"
+    }
+]
