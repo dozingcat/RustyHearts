@@ -202,7 +202,7 @@ class HeartsApiTest(unittest.TestCase):
             "tricks": [
                 {"leader": 2, "cards": "2C AC QC KC"},
                 {"leader": 3, "cards": "2S 5S AS QS"},
-                {"leader": 1, "cards": "2D 9H KD AH"},
+                {"leader": 1, "cards": "2D 9H JD AH"},
             ]
         }
         req_bytes = json.dumps(score_req).encode('utf-8')
@@ -211,6 +211,10 @@ class HeartsApiTest(unittest.TestCase):
         self.lib.points_taken_from_json(req_bytes, len(req_bytes), score_buffer, 4)
         self.assertEqual(list(score_buffer), [0, 13, 0, 2])
 
+        score_req["rules"] = {"jd_minus_10": True}
+        req_bytes = json.dumps(score_req).encode('utf-8')
+        self.lib.points_taken_from_json(req_bytes, len(req_bytes), score_buffer, 4)
+        self.assertEqual(list(score_buffer), [0, 13, 0, -8])
 
 if __name__ == '__main__':
     unittest.main()

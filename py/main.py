@@ -293,7 +293,7 @@ class HeartsApp(App):
         x_incr = (
             0 if len(cards) <= 1
             else (x_end - x_start - width_px / self.layout.width) / (len(cards) - 1))
-        if len(cards) == 1:
+        if len(cards) <= 1:
             x_start = 0.5 - width_frac / 2
         elif 0 < x_incr < width_frac / 4:
             # Not enough of each card's horizontal portion is visible, shrink so it is.
