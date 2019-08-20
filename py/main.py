@@ -23,18 +23,31 @@ from hearts import Match, Round, RuleSet
 # Card images from https://github.com/hayeah/playing-cards-assets, MIT licensed.
 CARD_WIDTH_OVER_HEIGHT = 500.0 / 726
 
+def card_image_path(c: Card):
+    return f'images/cards/{c.ascii_string()}.png'
+
+BLACK_CARD_IMAGE_PATH = 'images/cards/black.png'
+MENU_ICON_PATH = 'images/menu.png'
+
+
 # https://kivy.org/doc/stable/api-kivy.uix.behaviors.html
 class ImageButton(ButtonBehavior, Image):
     pass
 
 
 @unique
-class Mode(Enum):
+class GameMode(Enum):
     NOT_STARTED = 0
     PASSING = 1
     PLAYING = 2
     ROUND_FINISHED = 3
     MATCH_FINISHED = 4
+
+
+@unique
+class MenuMode(Enum):
+    NOT_VISIBLE = 0
+    VISIBLE = 1
 
 
 def sorted_cards_for_display(cards: Iterable[Card]):
@@ -44,14 +57,6 @@ def sorted_cards_for_display(cards: Iterable[Card]):
         cards_in_suit.sort(key=lambda c: c.rank.rank_val, reverse=True)
         sc.extend(cards_in_suit)
     return sc
-
-
-def card_image_path(c: Card):
-    return f'images/cards/{c.ascii_string()}.png'
-
-
-def black_card_image_path():
-    return 'images/cards/black.png'
 
 
 def passing_text(round: Round):
@@ -146,31 +151,38 @@ class HeartsApp(App):
     def build(self):
         self.layout = FloatLayout()
         set_rect_background(self.layout, [0, 0.3, 0, 1])
-        self.mode = Mode.NOT_STARTED
+        self.game_mode = GameMode.NOT_STARTED
+        self.menu_mode = MenuMode.NOT_VISIBLE
         self.cards_to_pass = set()
         self.dimmed_cards = []
-        self.match = Match(rules_from_preferences(self.config))
+        self.match = None
         self.finished_match = None
-        Clock.schedule_once(lambda dt: self.start_game(), 0)
+        Clock.schedule_once(lambda dt: self.start_match(), 0)
         Window.on_resize = lambda *args: self.render()
         self.layout.bind(on_touch_down=lambda *args: self.handle_background_click())
         return self.layout
 
     def handle_background_click(self):
         # This gets *all* clicks/touches, so we have to decide if we really want it.
-        if self.mode == Mode.ROUND_FINISHED or self.mode == Mode.MATCH_FINISHED:
-            self.finished_match = None
+        if self.game_mode == GameMode.ROUND_FINISHED:
             self.start_game()
+        elif self.game_mode == GameMode.MATCH_FINISHED:
+            self.start_match()
 
+    def start_match(self):
+        self.match = Match(rules_from_preferences(self.config))
+        self.finished_match = None
+        self.start_game()
 
     def start_game(self):
         self.hearts_round = self.match.next_round()
-        self.mode = Mode.PASSING if self.hearts_round.pass_info.direction > 0 else Mode.PLAYING
+        self.game_mode = GameMode.PASSING if self.hearts_round.pass_info.direction > 0 else GameMode.PLAYING
         self.cards_to_pass = set()
+        self.dimmed_cards = []
         self.render()
-        if self.mode == Mode.PASSING:
+        if self.game_mode == GameMode.PASSING:
             print(f'Pass direction={self.hearts_round.pass_info.direction}')
-        elif self.mode == Mode.PLAYING:
+        elif self.game_mode == GameMode.PLAYING:
             self.start_play()
 
     def player(self):
@@ -206,14 +218,13 @@ class HeartsApp(App):
         if winners:
             self.do_match_over(winners)
         else:
-            self.mode = Mode.ROUND_FINISHED
+            self.game_mode = GameMode.ROUND_FINISHED
             self.render()
 
     def do_match_over(self, winners: List[int]):
         print(f'Winners: {winners}')
-        self.mode = Mode.MATCH_FINISHED
+        self.game_mode = GameMode.MATCH_FINISHED
         self.finished_match = self.match
-        self.match = Match(rules_from_preferences(self.config))
         self.render()
 
     def handle_next_play(self):
@@ -254,7 +265,7 @@ class HeartsApp(App):
         self.hearts_round.pass_cards(passed_cards)
         self.dimmed_cards = set(self.player().hand) - set(self.player().received_cards)
         self.render()
-        self.mode = Mode.PLAYING
+        self.game_mode = GameMode.PLAYING
         Clock.schedule_once(lambda dt: self.start_play(), 1.5)
 
     def default_font_size(self):
@@ -267,6 +278,7 @@ class HeartsApp(App):
         self.render_trick()
         self.render_message()
         self.render_score()
+        self.render_controls()
 
     def render_hand(self):
         hand = sorted_cards_for_display(self.hearts_round.players[0].hand)
@@ -317,7 +329,7 @@ class HeartsApp(App):
             img_path = card_image_path(c)
             opacity = 0.3 if c in self.dimmed_cards else 1.0
             if opacity < 1.0:
-                black = Image(source=black_card_image_path(), size_hint=size, pos_hint=pos)
+                black = Image(source=BLACK_CARD_IMAGE_PATH, size_hint=size, pos_hint=pos)
                 self.layout.add_widget(black)
             img = ImageButton(source=img_path, size_hint=size, pos_hint=pos)
             img.opacity = opacity
@@ -343,7 +355,7 @@ class HeartsApp(App):
                 self.layout.add_widget(img)
 
     def render_message(self):
-        if self.mode == Mode.PASSING:
+        if self.game_mode == GameMode.PASSING:
             font_size = self.default_font_size()
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
@@ -356,7 +368,7 @@ class HeartsApp(App):
             self.layout.add_widget(pass_label)
 
     def render_score(self):
-        if self.mode == Mode.ROUND_FINISHED or self.mode == Mode.MATCH_FINISHED:
+        if self.game_mode == GameMode.ROUND_FINISHED or self.game_mode == GameMode.MATCH_FINISHED:
             font_size = self.default_font_size()
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
@@ -401,9 +413,9 @@ class HeartsApp(App):
 
     def handle_image_click(self, card: Card):
         print(f'Click: {card.symbol_string()}')
-        if self.mode == Mode.PASSING:
+        if self.game_mode == GameMode.PASSING:
             self.set_or_unset_card_to_pass(card)
-        elif self.mode == Mode.PLAYING:
+        elif self.game_mode == GameMode.PLAYING:
             if self.hearts_round.current_trick:
                 legal = capi.legal_plays(self.hearts_round)
                 if self.hearts_round.current_player_index() == 0:
@@ -414,6 +426,61 @@ class HeartsApp(App):
                     else:
                         print(f'Illegal play!')
         return True
+
+    def render_controls(self):
+        if self.menu_mode == MenuMode.NOT_VISIBLE:
+            self.render_menu_icon()
+        elif self.menu_mode == MenuMode.VISIBLE:
+            self.render_menu()
+
+    def render_menu_icon(self):
+        pos = {'x': 0.0, 'y': 0.9}
+        size = [0.1, 0.1]
+        ratio = self.layout.width / self.layout.height
+        if ratio > 1:
+            size[0] /= ratio
+        else:
+            size[1] *= ratio
+            pos['y'] = 1 - size[1]
+        img = ImageButton(source=MENU_ICON_PATH, pos_hint=pos, size_hint=size)
+
+        img.bind(on_press=lambda b: self.show_menu())
+        self.layout.add_widget(img)
+
+    def render_menu(self):
+        menu_container = BoxLayout(orientation='vertical', pos_hint={'x': 0.1, 'y': 0.1}, size_hint=(0.8, 0.8))
+        set_round_rect_background(menu_container, [0, 0, 0, 0.9], 20)
+
+        def start_match():
+            self.menu_mode = MenuMode.NOT_VISIBLE
+            self.start_match()
+
+        new_match_button = Button(text='New Match')
+        new_match_button.bind(on_press=lambda *args: start_match())
+        menu_container.add_widget(new_match_button)
+
+        resume_button = Button(text='Resume Match')
+        resume_button.bind(on_press=lambda *args: self.hide_menu())
+        menu_container.add_widget(resume_button)
+
+        def open_settings():
+            self.hide_menu()
+            self.open_settings()
+
+        settings_button = Button(text='Preferences')
+        settings_button.bind(on_press=lambda *args: open_settings())
+        menu_container.add_widget(settings_button)
+
+        self.layout.add_widget(menu_container)
+
+    def show_menu(self):
+        self.menu_mode = MenuMode.VISIBLE
+        self.render()
+
+    def hide_menu(self):
+        self.menu_mode = MenuMode.NOT_VISIBLE
+        self.render()
+
 
 
 if __name__ == '__main__':

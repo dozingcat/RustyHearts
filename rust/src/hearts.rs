@@ -109,12 +109,12 @@ fn moon_shooter(tricks: &[Trick], points: &[i32], rules: &RuleSet) -> Option<usi
     if rules.jd_minus_10 {
         // Undo the -10 points for JD. We have to do this rather than just
         // looking at the point totals because [16, 0, 0, 0] may or may not be
-        // a shoot, depending on whether one of the players with zero took the
-        // jack and ten hearts.
+        // a shoot, depending on whether one of the players with zero took
+        // ten hearts along with the jack of diamonds and also ten hearts.
         let mut points_without_jd = points.to_vec();
         for t in tricks.iter() {
             if t.cards.contains(&JACK_OF_DIAMONDS) {
-                points_without_jd[t.winner as usize] -= 10;
+                points_without_jd[t.winner as usize] += 10;
                 break;
             }
         }
@@ -503,5 +503,19 @@ mod test {
         assert_eq!(points_for_tricks(&tricks, &rules), vec![0, -9, 13, 0]);
     }
 
-    // TODO: Tests for shooting the moon.
+    #[test]
+    fn test_shooting_points() {
+        let mut rules = RuleSet::default();
+        let tricks = vec![
+            make_trick(0, "2C AC KC QC", 1),
+            make_trick(1, "AD QS JD JH", 1),
+            make_trick(1, "AH 2H 3H 4H", 1),
+            make_trick(1, "KH 5H 6H 7H", 1),
+            make_trick(1, "QH 8H 9H TH", 1),
+        ];
+        assert_eq!(points_for_tricks(&tricks, &rules), vec![26, 0, 26, 26]);
+
+        rules.jd_minus_10 = true;
+        assert_eq!(points_for_tricks(&tricks, &rules), vec![26, -10, 26, 26]);
+    }
 }
