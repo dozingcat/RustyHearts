@@ -154,9 +154,7 @@ class HeartsApp(App):
         self.game_mode = GameMode.NOT_STARTED
         self.menu_mode = MenuMode.NOT_VISIBLE
         self.cards_to_pass = set()
-        self.dimmed_cards = []
         self.match = None
-        self.finished_match = None
         Clock.schedule_once(lambda dt: self.start_match(), 0)
         Window.on_resize = lambda *args: self.render()
         self.layout.bind(on_touch_down=lambda *args: self.handle_background_click())
@@ -165,55 +163,54 @@ class HeartsApp(App):
     def handle_background_click(self):
         # This gets *all* clicks/touches, so we have to decide if we really want it.
         if self.game_mode == GameMode.ROUND_FINISHED:
-            self.start_game()
+            self.start_round()
         elif self.game_mode == GameMode.MATCH_FINISHED:
             self.start_match()
 
     def start_match(self):
         self.match = Match(rules_from_preferences(self.config))
-        self.finished_match = None
-        self.start_game()
+        self.start_round()
 
-    def start_game(self):
-        self.hearts_round = self.match.next_round()
-        self.game_mode = GameMode.PASSING if self.hearts_round.pass_info.direction > 0 else GameMode.PLAYING
+    def start_round(self):
+        self.match.start_next_round()
+        self.game_mode = GameMode.PASSING if self.match.current_round.pass_info.direction > 0 else GameMode.PLAYING
         self.cards_to_pass = set()
-        self.dimmed_cards = []
         self.render()
         if self.game_mode == GameMode.PASSING:
-            print(f'Pass direction={self.hearts_round.pass_info.direction}')
+            print(f'Pass direction={self.match.current_round.pass_info.direction}')
         elif self.game_mode == GameMode.PLAYING:
             self.start_play()
 
     def player(self):
-        return self.hearts_round.players[0]
+        return self.match.current_round.players[0]
 
     def start_play(self):
-        self.hearts_round.start_play()
-        lc = capi.legal_plays(self.hearts_round)
+        self.match.current_round.start_play()
+        lc = capi.legal_plays(self.match.current_round)
         print(f'Legal plays (hopefully 2c): {" ".join(c.symbol_string() for c in lc)}')
         self.handle_next_play()
 
     def play_card(self, card: Card):
-        self.hearts_round.play_card(card)
+        self.match.current_round.play_card(card)
         self.render()
-        if self.hearts_round.is_finished():
+        if self.match.current_round.is_finished():
             self.do_round_finished()
         else:
-            if self.hearts_round.did_trick_just_finish():
-                w = self.hearts_round.last_trick_winner()
+            if self.match.current_round.did_trick_just_finish():
+                w = self.match.current_round.last_trick_winner()
                 print(f'Player {w} takes the trick')
-                print(f'Points: {capi.points_taken(self.hearts_round)}')
-                Clock.schedule_once(lambda dt: self.handle_next_play(), 1.5)
+                print(f'Points: {capi.points_taken(self.match.current_round)}')
+                if w != 0:
+                    Clock.schedule_once(lambda dt: self.handle_next_play(), 1.5)
             else:
                 self.handle_next_play()
 
     def do_round_finished(self):
         print('Round over')
-        round_scores = capi.points_taken(self.hearts_round)
-        self.match.record_round_scores(round_scores)
+        self.match.finish_round()
+        round_scores = self.match.score_history[-1]
         print(f'Round points: {round_scores}')
-        print(f'Total points: {self.match.scores}')
+        print(f'Total points: {self.match.total_scores()}')
         winners = self.match.winners()
         if winners:
             self.do_match_over(winners)
@@ -224,21 +221,19 @@ class HeartsApp(App):
     def do_match_over(self, winners: List[int]):
         print(f'Winners: {winners}')
         self.game_mode = GameMode.MATCH_FINISHED
-        self.finished_match = self.match
         self.render()
 
     def handle_next_play(self):
         def doit():
-            if self.hearts_round.is_finished():
+            rnd = self.match.current_round
+            if not rnd or rnd.is_finished():
                 return
-            pnum = self.hearts_round.current_player_index()
+            pnum = rnd.current_player_index()
             if pnum == 0:
-                legal_plays = capi.legal_plays(self.hearts_round)
-                self.dimmed_cards = set(self.player().hand) - set(legal_plays)
                 self.render()
-            if pnum != 0:
-                lc = capi.legal_plays(self.hearts_round)
-                best = capi.best_play(self.hearts_round)
+            else:
+                lc = capi.legal_plays(rnd)
+                best = capi.best_play(rnd)
                 print(f'Legal plays: {" ".join(c.symbol_string() for c in lc)}')
                 print(f'Player {pnum} plays {best.symbol_string()}')
                 self.play_card(best)
@@ -250,20 +245,18 @@ class HeartsApp(App):
             self.cards_to_pass.remove(card)
         else:
             self.cards_to_pass.add(card)
-        if len(self.cards_to_pass) == self.hearts_round.pass_info.num_cards:
+        if len(self.cards_to_pass) == self.match.current_round.pass_info.num_cards:
             self.pass_cards(self.cards_to_pass)
         else:
-            self.dimmed_cards = self.cards_to_pass
             self.render()
 
     def pass_cards(self, cards):
         passed_cards = [list(self.cards_to_pass)]
-        for pnum in range(1, self.hearts_round.rules.num_players):
-            pcards = capi.cards_to_pass(self.hearts_round, pnum)
+        for pnum in range(1, self.match.current_round.rules.num_players):
+            pcards = capi.cards_to_pass(self.match.current_round, pnum)
             print(f'Player {pnum} passes {" ".join(c.symbol_string() for c in pcards)}')
             passed_cards.append(pcards)
-        self.hearts_round.pass_cards(passed_cards)
-        self.dimmed_cards = set(self.player().hand) - set(self.player().received_cards)
+        self.match.current_round.pass_cards(passed_cards)
         self.render()
         self.game_mode = GameMode.PLAYING
         Clock.schedule_once(lambda dt: self.start_play(), 1.5)
@@ -281,7 +274,9 @@ class HeartsApp(App):
         self.render_controls()
 
     def render_hand(self):
-        hand = sorted_cards_for_display(self.hearts_round.players[0].hand)
+        if not self.match.current_round:
+            return
+        hand = sorted_cards_for_display(self.match.current_round.players[0].hand)
         if self.layout.height > self.layout.width and len(hand) > 7:
             # For an odd number of cards, the top row should have the extra card.
             odd = (len(hand) % 2 == 1)
@@ -294,6 +289,18 @@ class HeartsApp(App):
             self.render_cards(bottom_cards, y=0.05, x_offset=0.5 if odd else 0)
         else:
             self.render_cards(hand)
+
+    def _dimmed_cards(self):
+        if self.game_mode == GameMode.PASSING:
+            if self.player().received_cards:
+                return set(self.player().hand) - set(self.player().received_cards)
+            else:
+                return self.cards_to_pass
+        rnd = self.match.current_round
+        if rnd and rnd.is_in_progress() and rnd.current_player_index() == 0:
+            legal = capi.legal_plays(self.match.current_round)
+            return set(self.player().hand) - set(legal)
+        return []
 
     def render_cards(self, cards: List[Card], y=0.05, x_offset=0):
         height_frac = 0.2
@@ -321,13 +328,14 @@ class HeartsApp(App):
             x_start = 0.5 - hand_width / 2
             x_end = x_start + hand_width
         size = (width_frac, height_frac)
+        dimmed_cards = self._dimmed_cards()
         for i, c in enumerate(cards):
             if c is None:
                 continue
             x = x_start + ((i + x_offset) * x_incr)
             pos = {'x': x, 'y': y}
             img_path = card_image_path(c)
-            opacity = 0.3 if c in self.dimmed_cards else 1.0
+            opacity = 0.3 if c in dimmed_cards else 1.0
             if opacity < 1.0:
                 black = Image(source=BLACK_CARD_IMAGE_PATH, size_hint=size, pos_hint=pos)
                 self.layout.add_widget(black)
@@ -337,9 +345,11 @@ class HeartsApp(App):
             self.layout.add_widget(img)
 
     def render_trick(self):
-        ct = self.hearts_round.current_trick
-        if ct and len(ct.cards) == 0 and len(self.hearts_round.prev_tricks) > 0:
-            ct = self.hearts_round.prev_tricks[-1]
+        if not self.match.current_round:
+            return
+        ct = self.match.current_round.current_trick
+        if ct and len(ct.cards) == 0 and len(self.match.current_round.prev_tricks) > 0:
+            ct = self.match.current_round.prev_tricks[-1]
         if ct:
             # (0, 0) puts the bottom left of the card at the bottom left of the display.
             positions = [
@@ -350,7 +360,7 @@ class HeartsApp(App):
             ]
             for i, card in enumerate(ct.cards):
                 img_path = card_image_path(card)
-                pnum = (ct.leader + i) % self.hearts_round.rules.num_players
+                pnum = (ct.leader + i) % self.match.current_round.rules.num_players
                 img = ImageButton(source=img_path, pos_hint=positions[pnum], size_hint=(0.2, 0.2))
                 self.layout.add_widget(img)
 
@@ -360,7 +370,7 @@ class HeartsApp(App):
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
             pass_label = make_label(
-                text=passing_text(self.hearts_round),
+                text=passing_text(self.match.current_round),
                 font_size=font_size,
                 pos_hint={'x': 0.1, 'y': 0.5 - label_height_frac / 2},
                 size_hint=(0.8, label_height_frac))
@@ -391,7 +401,7 @@ class HeartsApp(App):
                 row_layout.add_widget(make_spacer())
                 return row_layout
 
-            winners = self.finished_match.winners() if self.finished_match else []
+            winners = self.match.winners()
             num_labels = 3 if winners else 2
             score_layout = BoxLayout(
                 orientation='vertical',
@@ -406,8 +416,8 @@ class HeartsApp(App):
                     score_text = 'You lost :('
                 result_label = make_label(text=score_text, font_size=font_size)
                 score_layout.add_widget(result_label)
-            round_scores = capi.points_taken(self.hearts_round)
-            match_scores = (self.finished_match or self.match).scores
+            round_scores = self.match.score_history[-1]
+            match_scores = self.match.total_scores()
             score_layout.add_widget(make_score_row('Round score:', round_scores))
             score_layout.add_widget(make_score_row('Total score:', match_scores))
 
@@ -416,9 +426,9 @@ class HeartsApp(App):
         if self.game_mode == GameMode.PASSING:
             self.set_or_unset_card_to_pass(card)
         elif self.game_mode == GameMode.PLAYING:
-            if self.hearts_round.current_trick:
-                legal = capi.legal_plays(self.hearts_round)
-                if self.hearts_round.current_player_index() == 0:
+            if self.match.current_round.current_trick:
+                legal = capi.legal_plays(self.match.current_round)
+                if self.match.current_round.current_player_index() == 0:
                     if card in legal:
                         self.play_card(card)
                         self.highlighted_cards = []
