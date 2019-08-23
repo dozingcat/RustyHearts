@@ -290,17 +290,25 @@ class HeartsApp(App):
         else:
             self.render_cards(hand)
 
-    def _dimmed_cards(self):
+    def _card_opacities(self):
         if self.game_mode == GameMode.PASSING:
+            # Highlight cards selected to be passed, or received cards.
             if self.player().received_cards:
-                return set(self.player().hand) - set(self.player().received_cards)
+                dimmed = set(self.player().hand) - set(self.player().received_cards)
             else:
-                return self.cards_to_pass
+                dimmed = self.cards_to_pass
+            return {c: 0.3 for c in dimmed}
         rnd = self.match.current_round
-        if rnd and rnd.is_in_progress() and rnd.current_player_index() == 0:
-            legal = capi.legal_plays(self.match.current_round)
-            return set(self.player().hand) - set(legal)
-        return []
+        if rnd and rnd.is_in_progress():
+            if rnd.current_player_index() == 0:
+                # Highlight legal plays.
+                legal = capi.legal_plays(self.match.current_round)
+                dimmed = set(self.player().hand) - set(legal)
+                return {c: 0.3 for c in dimmed}
+            else:
+                # Slightly dim all cards since it's not our turn.
+                return {c: 0.7 for c in self.player().hand}
+        return {}
 
     def render_cards(self, cards: List[Card], y=0.05, x_offset=0):
         height_frac = 0.2
@@ -328,14 +336,14 @@ class HeartsApp(App):
             x_start = 0.5 - hand_width / 2
             x_end = x_start + hand_width
         size = (width_frac, height_frac)
-        dimmed_cards = self._dimmed_cards()
+        card_opacities = self._card_opacities()
         for i, c in enumerate(cards):
             if c is None:
                 continue
             x = x_start + ((i + x_offset) * x_incr)
             pos = {'x': x, 'y': y}
             img_path = card_image_path(c)
-            opacity = 0.3 if c in dimmed_cards else 1.0
+            opacity = card_opacities.get(c, 1.0)
             if opacity < 1.0:
                 black = Image(source=BLACK_CARD_IMAGE_PATH, size_hint=size, pos_hint=pos)
                 self.layout.add_widget(black)
