@@ -19,6 +19,7 @@ from kivy.uix.settings import Settings
 import capi
 from cards import Card, Rank, Suit
 from hearts import Match, Round, RuleSet
+from storage import Storage
 
 # Card images from https://github.com/hayeah/playing-cards-assets, MIT licensed.
 CARD_WIDTH_OVER_HEIGHT = 500.0 / 726
@@ -149,23 +150,54 @@ class HeartsApp(App):
         settings.add_json_panel('Rules', self.config, 'settings.json')
 
     def build(self):
+        self.storage = Storage(self.user_data_dir)
         self.layout = FloatLayout()
         set_rect_background(self.layout, [0, 0.3, 0, 1])
-        self.game_mode = GameMode.NOT_STARTED
-        self.menu_mode = MenuMode.NOT_VISIBLE
-        self.cards_to_pass = set()
-        self.match = None
-        Clock.schedule_once(lambda dt: self.start_match(), 0)
         Window.on_resize = lambda *args: self.render()
         self.layout.bind(on_touch_down=lambda *args: self.handle_background_click())
+        self.cards_to_pass = set()
+        self.menu_mode = MenuMode.NOT_VISIBLE
+        self.match = self.storage.load_current_match()
+        if self.match:
+            Clock.schedule_once(lambda dt: self.render(), 0)
+            # In case it's an AI opponent's turn.
+            Clock.schedule_once(lambda dt: self.handle_next_play(), 1)
+        else:
+            Clock.schedule_once(lambda dt: self.start_match(), 0)
         return self.layout
+
+    def on_pause(self):
+        print('Pause!')
+        self.storage.store_current_match(self.match)
+
+    def on_stop(self):
+        print('Stop!')
+        self.storage.store_current_match(self.match)
+
+    def on_resume(self):
+        print('Resume!')
+
+    def game_mode(self):
+        if not self.match:
+            return GameMode.NOT_STARTED
+        if self.match.is_finished():
+            return GameMode.MATCH_FINISHED
+        rnd = self.match.current_round
+        if not rnd or rnd.is_finished():
+            return GameMode.ROUND_FINISHED
+        elif rnd.is_awaiting_pass():
+            return GameMode.PASSING
+        else:
+            assert rnd.is_in_progress()
+            return GameMode.PLAYING
 
     def handle_background_click(self):
         # This gets *all* clicks/touches, so we have to decide if we really want it.
-        if self.game_mode == GameMode.ROUND_FINISHED:
-            self.start_round()
-        elif self.game_mode == GameMode.MATCH_FINISHED:
+        mode = self.game_mode()
+        if mode == GameMode.MATCH_FINISHED:
             self.start_match()
+        elif mode == GameMode.ROUND_FINISHED:
+            self.start_round()
 
     def start_match(self):
         self.match = Match(rules_from_preferences(self.config))
@@ -173,13 +205,13 @@ class HeartsApp(App):
 
     def start_round(self):
         self.match.start_next_round()
-        self.game_mode = GameMode.PASSING if self.match.current_round.pass_info.direction > 0 else GameMode.PLAYING
+        rnd = self.match.current_round
         self.cards_to_pass = set()
-        self.render()
-        if self.game_mode == GameMode.PASSING:
-            print(f'Pass direction={self.match.current_round.pass_info.direction}')
-        elif self.game_mode == GameMode.PLAYING:
+        if rnd.is_awaiting_pass():
+            print(f'Pass direction={rnd.pass_info.direction}')
+        else:
             self.start_play()
+        self.render()
 
     def player(self):
         return self.match.current_round.players[0]
@@ -192,7 +224,6 @@ class HeartsApp(App):
 
     def play_card(self, card: Card):
         self.match.current_round.play_card(card)
-        self.render()
         if self.match.current_round.is_finished():
             self.do_round_finished()
         else:
@@ -204,29 +235,26 @@ class HeartsApp(App):
                     Clock.schedule_once(lambda dt: self.handle_next_play(), 1.5)
             else:
                 self.handle_next_play()
+            self.render()
 
     def do_round_finished(self):
+        assert self.match.current_round
+        self.storage.record_round_stats(self.match.current_round)
         print('Round over')
         self.match.finish_round()
         round_scores = self.match.score_history[-1]
         print(f'Round points: {round_scores}')
         print(f'Total points: {self.match.total_scores()}')
-        winners = self.match.winners()
-        if winners:
-            self.do_match_over(winners)
-        else:
-            self.game_mode = GameMode.ROUND_FINISHED
-            self.render()
-
-    def do_match_over(self, winners: List[int]):
-        print(f'Winners: {winners}')
-        self.game_mode = GameMode.MATCH_FINISHED
+        if self.match.is_finished():
+            print(f'Winners: {self.match.winners()}')
+            self.storage.record_match_stats(self.match)
+            self.storage.remove_current_match()
         self.render()
 
     def handle_next_play(self):
         def doit():
             rnd = self.match.current_round
-            if not rnd or rnd.is_finished():
+            if not rnd or not rnd.is_in_progress():
                 return
             pnum = rnd.current_player_index()
             if pnum == 0:
@@ -257,9 +285,8 @@ class HeartsApp(App):
             print(f'Player {pnum} passes {" ".join(c.symbol_string() for c in pcards)}')
             passed_cards.append(pcards)
         self.match.current_round.pass_cards(passed_cards)
-        self.render()
-        self.game_mode = GameMode.PLAYING
         Clock.schedule_once(lambda dt: self.start_play(), 1.5)
+        self.render()
 
     def default_font_size(self):
         return min(self.layout.width, self.layout.height) * 0.07
@@ -291,7 +318,7 @@ class HeartsApp(App):
             self.render_cards(hand)
 
     def _card_opacities(self):
-        if self.game_mode == GameMode.PASSING:
+        if self.game_mode() == GameMode.PASSING:
             # Highlight cards selected to be passed, or received cards.
             if self.player().received_cards:
                 dimmed = set(self.player().hand) - set(self.player().received_cards)
@@ -307,7 +334,7 @@ class HeartsApp(App):
                 return {c: 0.3 for c in dimmed}
             else:
                 # Slightly dim all cards since it's not our turn.
-                return {c: 0.7 for c in self.player().hand}
+                return {c: 0.6 for c in self.player().hand}
         return {}
 
     def render_cards(self, cards: List[Card], y=0.05, x_offset=0):
@@ -373,7 +400,7 @@ class HeartsApp(App):
                 self.layout.add_widget(img)
 
     def render_message(self):
-        if self.game_mode == GameMode.PASSING:
+        if self.game_mode() == GameMode.PASSING:
             font_size = self.default_font_size()
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
@@ -386,7 +413,8 @@ class HeartsApp(App):
             self.layout.add_widget(pass_label)
 
     def render_score(self):
-        if self.game_mode == GameMode.ROUND_FINISHED or self.game_mode == GameMode.MATCH_FINISHED:
+        mode = self.game_mode()
+        if mode in [GameMode.ROUND_FINISHED, GameMode.MATCH_FINISHED]:
             font_size = self.default_font_size()
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
@@ -431,16 +459,15 @@ class HeartsApp(App):
 
     def handle_image_click(self, card: Card):
         print(f'Click: {card.symbol_string()}')
-        if self.game_mode == GameMode.PASSING:
+        mode = self.game_mode()
+        if mode == GameMode.PASSING:
             self.set_or_unset_card_to_pass(card)
-        elif self.game_mode == GameMode.PLAYING:
+        elif mode == GameMode.PLAYING:
             if self.match.current_round.current_trick:
                 legal = capi.legal_plays(self.match.current_round)
                 if self.match.current_round.current_player_index() == 0:
                     if card in legal:
                         self.play_card(card)
-                        self.highlighted_cards = []
-                        self.render()
                     else:
                         print(f'Illegal play!')
         return True

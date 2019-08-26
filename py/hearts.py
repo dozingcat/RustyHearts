@@ -9,7 +9,7 @@ import capi
 class RuleSet:
     num_players: int = 4
     removed_cards: Set[Card] = frozenset()
-    point_limit: int = 100
+    point_limit: int = 50
     points_on_first_trick: bool = False
     queen_breaks_hearts: bool = False
     jd_minus_10: bool = False
@@ -46,7 +46,7 @@ class PassInfo:
 
 
 class Round:
-    def __init__(self, rules, pass_info, scores, deck=None):
+    def __init__(self, rules: RuleSet, pass_info: PassInfo, scores: List[int], deck: Deck=None):
         self.rules = rules
         self.pass_info = pass_info
         self.scores_before_round = scores[:]
@@ -110,6 +110,9 @@ class Round:
         return (self.current_trick is not None and len(self.current_trick.cards) == 0 and
                 len(self.prev_tricks) > 0)
 
+    def is_awaiting_pass(self):
+        return self.current_trick is None and self.pass_info.direction > 0
+
     def is_in_progress(self):
         return self.current_trick is not None
 
@@ -118,18 +121,17 @@ class Round:
 
 
 class Match:
-    def __init__(self, rules: RuleSet, num_players=4, point_limit=100):
+    def __init__(self, rules: RuleSet):
         self.rules = rules
-        self.num_players = num_players
-        self.point_limit = point_limit
         self.score_history = []
-        self.pass_direction_seq = itertools.cycle(
-            [1, num_players - 1] + list(range(2, num_players - 1)) + [0])
         self.current_round = None
+        # Pass direction order is [1 (left), n-1 (right), 2, 3...n-2, 0 (keep)].
+        self.pass_dir_order = [1, rules.num_players - 1] + list(range(2, rules.num_players - 1)) + [0]
+        assert len(self.pass_dir_order) == rules.num_players
 
     def total_scores(self):
         if not self.score_history:
-            return [0] * self.num_players
+            return [0] * self.rules.num_players
         # [[1,2,3,4], [2,3,4,5], [10, 20, 30, 40]] -> [13, 25, 37, 49]
         return list(map(sum, zip(*self.score_history)))
 
@@ -141,12 +143,16 @@ class Match:
     def start_next_round(self):
         assert not self.current_round
         assert not self.winners()
-        passinfo = PassInfo(direction=next(self.pass_direction_seq), num_cards=3)
+        next_pass_dir = self.pass_dir_order[len(self.score_history) % self.rules.num_players]
+        passinfo = PassInfo(direction=next_pass_dir, num_cards=3)
         self.current_round = Round(self.rules, passinfo, self.total_scores())
 
     def winners(self):
         scores = self.total_scores()
-        if max(scores) < self.point_limit:
+        if max(scores) < self.rules.point_limit:
             return []
         best = min(scores)
         return [i for i, s in enumerate(scores) if s == best]
+
+    def is_finished(self):
+        return any(s >= self.rules.point_limit for s in self.total_scores())
