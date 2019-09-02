@@ -107,17 +107,18 @@ class Round:
         return self.prev_tricks[-1].winner if self.prev_tricks else None
 
     def did_trick_just_finish(self):
-        return (self.current_trick is not None and len(self.current_trick.cards) == 0 and
+        return ((self.current_trick is None or len(self.current_trick.cards) == 0) and
                 len(self.prev_tricks) > 0)
-
-    def is_awaiting_pass(self):
-        return self.current_trick is None and self.pass_info.direction > 0
 
     def is_in_progress(self):
         return self.current_trick is not None
 
     def is_finished(self):
         return self.current_trick is None and len(self.prev_tricks) > 0
+
+    def is_awaiting_pass(self):
+        return (
+            not self.is_finished() and self.current_trick is None and self.pass_info.direction > 0)
 
     def points_taken(self):
         return capi.points_taken(self)
@@ -135,7 +136,8 @@ class Match:
         self.score_history = []
         self.current_round = None
         # Pass direction order is [1 (left), n-1 (right), 2, 3...n-2, 0 (keep)].
-        self.pass_dir_order = [1, rules.num_players - 1] + list(range(2, rules.num_players - 1)) + [0]
+        self.pass_dir_order = (
+            [1, rules.num_players - 1] + list(range(2, rules.num_players - 1)) + [0])
         assert len(self.pass_dir_order) == rules.num_players
 
     def total_scores(self):
