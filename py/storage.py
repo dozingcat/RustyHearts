@@ -1,36 +1,48 @@
+import contextlib
 import json
 import os
+import time
 from typing import Iterable, List
 
-from cards import Card
+from cards import Card, Rank, Suit
 from hearts import Match, PassInfo, Player, Round, RuleSet, Trick
+from stats import MatchStats, RoundStats, StatsWithAndWithoutJD
 
 def cards_to_string(cards: Iterable[Card]) -> str:
-    return ' '.join(c.ascii_string() for c in cards)
+    return " ".join(c.ascii_string() for c in cards)
 
 def cards_from_string(s: str) -> List[Card]:
     return [Card.parse(p) for p in s.split()]
 
+# Short keys since serialized rules may be written often in history files.
+RULES_NUM_PLAYERS_KEY = "np"
+RULES_REMOVED_CARDS_KEY = "rc"
+RULES_POINT_LIMIT_KEY = "p"
+RULES_POINTS_ON_FIRST_TRICK_KEY = "p1"
+RULES_QUEEN_BREAKS_HEARTS_KEY = "qb"
+RULES_JD_MINUS_10_KEY = "jd"
+RULES_SHOOTING_DISABLED_KEY = "sd"
+
 def rules_to_dict(rules: RuleSet):
     return {
-        "num_players": rules.num_players,
-        "removed_cards": cards_to_string(rules.removed_cards),
-        "point_limit": rules.point_limit,
-        "points_on_first_trick": rules.points_on_first_trick,
-        "queen_breaks_hearts": rules.queen_breaks_hearts,
-        "jd_minus_10": rules.jd_minus_10,
-        "shooting_disabled": rules.shooting_disabled,
+        RULES_NUM_PLAYERS_KEY: rules.num_players,
+        RULES_REMOVED_CARDS_KEY: cards_to_string(rules.removed_cards),
+        RULES_POINT_LIMIT_KEY: rules.point_limit,
+        RULES_POINTS_ON_FIRST_TRICK_KEY: int(rules.points_on_first_trick),
+        RULES_QUEEN_BREAKS_HEARTS_KEY: int(rules.queen_breaks_hearts),
+        RULES_JD_MINUS_10_KEY: int(rules.jd_minus_10),
+        RULES_SHOOTING_DISABLED_KEY: int(rules.shooting_disabled),
     }
 
 def rules_from_dict(d) -> RuleSet:
     return RuleSet(
-        num_players=d["num_players"],
-        removed_cards=cards_from_string(d["removed_cards"]),
-        point_limit=d["point_limit"],
-        points_on_first_trick=d["points_on_first_trick"],
-        queen_breaks_hearts=d["queen_breaks_hearts"],
-        jd_minus_10=d["jd_minus_10"],
-        shooting_disabled=d["shooting_disabled"],
+        num_players=d[RULES_NUM_PLAYERS_KEY],
+        removed_cards=cards_from_string(d[RULES_REMOVED_CARDS_KEY]),
+        point_limit=d[RULES_POINT_LIMIT_KEY],
+        points_on_first_trick=bool(d[RULES_POINTS_ON_FIRST_TRICK_KEY]),
+        queen_breaks_hearts=bool(d[RULES_QUEEN_BREAKS_HEARTS_KEY]),
+        jd_minus_10=bool(d[RULES_JD_MINUS_10_KEY]),
+        shooting_disabled=bool(d[RULES_SHOOTING_DISABLED_KEY]),
     )
 
 def player_to_dict(player: Player):
@@ -102,16 +114,16 @@ class Storage:
         self.base_dir = base_dir
 
     def current_match_filename(self):
-        return os.path.join(self.base_dir, 'current_match.json')
+        return os.path.join(self.base_dir, "current_match.json")
 
     def store_current_match(self, match: Match):
         mdict = match_to_dict(match)
         match_filename = self.current_match_filename()
-        match_temp_filename = match_filename + '.tmp'
-        with open(match_temp_filename, 'w') as f:
+        match_temp_filename = match_filename + ".tmp"
+        with open(match_temp_filename, "w") as f:
             f.write(json.dumps(mdict))
         os.rename(match_temp_filename, match_filename)
-        print(f'Wrote match json to {match_filename}')
+        print(f"Wrote match json to {match_filename}")
 
     def load_current_match(self) -> Match:
         try:
@@ -122,14 +134,114 @@ class Storage:
                 mj = json.load(f)
             return match_from_dict(mj)
         except Exception as ex:
-            print(f'Failed to read stored match: {ex}')
+            print(f"Failed to read stored match: {ex}")
             return None
 
     def remove_current_match(self):
-        os.unlink(self.current_match_filename())
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(self.current_match_filename())
 
-    def record_match_stats(self, match: Match):
-        pass
+    def match_history_filename(self):
+        return os.path.join(self.base_dir, "matches.json")
 
-    def record_round_stats(self, round: Round):
-        pass
+    def record_match_stats(self, match: Match, time_fn=time.time):
+        winners = match.winners()
+        result = "lose"
+        if winners == [0]:
+            result = "win"
+        elif 0 in winners:
+            result = "tie"
+        match_info = {
+            "time": int(time_fn()),
+            "rules": rules_to_dict(match.rules),
+            "scores": match.total_scores(),
+            "result": result,
+        }
+        with open(self.match_history_filename(), "a") as f:
+            f.write(json.dumps(match_info, separators=(',', ':')))
+            f.write('\n')
+
+    def load_match_stats(self) -> StatsWithAndWithoutJD[MatchStats]:
+        with_jd = MatchStats()
+        without_jd = MatchStats()
+        mfile = self.match_history_filename()
+        if os.path.isfile(mfile):
+            with open(self.match_history_filename()) as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        m = json.loads(line)
+                        rules = rules_from_dict(m["rules"])
+                        scores = m["scores"]
+                        result = m["result"]
+                        stats = with_jd if rules.jd_minus_10 else without_jd
+                        stats.num_matches += 1
+                        stats.num_wins += (1 if result == "win" else 0)
+                        stats.num_ties += (1 if result == "tie" else 0)
+                        stats.total_points += scores[0]
+                    except Exception as ex:
+                        print(ex)
+        return StatsWithAndWithoutJD(with_jd, without_jd)
+
+    def round_history_filename(self):
+        return os.path.join(self.base_dir, "rounds.json")
+
+    def record_round_stats(self, rnd: Round, time_fn=time.time):
+        queen = Card(Rank.QUEEN, Suit.SPADES)
+        jack = Card(Rank.JACK, Suit.DIAMONDS)
+        cards_taken = rnd.cards_taken()
+        shooter = None
+        for i, cards in enumerate(cards_taken):
+            if queen in cards and sum(1 for c in cards if c.suit == Suit.HEARTS) == 13:
+                shooter = i
+                break
+        round_info = {
+            "time": int(time_fn()),
+            "rules": rules_to_dict(rnd.rules),
+            "points": rnd.points_taken(),
+            "qs": int(queen in cards_taken[0]),
+            "jd": int(jack in cards_taken[0]),
+            "hearts": sum(1 for c in cards_taken[0] if c.suit == Suit.HEARTS),
+            "shoot": shooter,
+        }
+        with open(self.round_history_filename(), "a") as f:
+            f.write(json.dumps(round_info, separators=(',', ':')))
+            f.write('\n')
+
+    def load_round_stats(self) -> StatsWithAndWithoutJD[RoundStats]:
+        with_jd = RoundStats()
+        without_jd = RoundStats()
+        rfile = self.round_history_filename()
+        if os.path.isfile(rfile):
+            with open(rfile) as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        r = json.loads(line)
+                        rules = rules_from_dict(r["rules"])
+                        points = r["points"]
+                        took_qs = bool(r["qs"])
+                        took_jd = bool(r["jd"])
+                        hearts = r["hearts"]
+                        shooter = r["shoot"]
+                        stats = with_jd if rules.jd_minus_10 else without_jd
+                        stats.num_rounds += 1
+                        stats.total_points += points[0]
+                        stats.total_opponent_points += (sum(points) - points[0])
+                        stats.num_moonshots += (1 if shooter == 0 else 0)
+                        stats.num_opponent_moonshots = (
+                            1 if shooter is not None and shooter != 0 else 0)
+                        # Don't count hearts or queen if the player shot.
+                        stats.num_queen_spades += (1 if took_qs and shooter != 0 else 0)
+                        stats.num_hearts += (hearts if shooter != 0 else 0)
+                        stats.num_jack_diamonds += (1 if took_jd else 0)
+                    except Exception as ex:
+                        print(ex)
+        return StatsWithAndWithoutJD(with_jd, without_jd)
+
+    def clear_stats(self):
+        for path in [self.match_history_filename(), self.round_history_filename()]:
+            with contextlib.suppress(FileNotFoundError):
+                os.unlink(path)

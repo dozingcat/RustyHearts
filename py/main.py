@@ -183,12 +183,11 @@ class HeartsApp(App):
         if self.match.is_finished():
             return GameMode.MATCH_FINISHED
         rnd = self.match.current_round
-        if not rnd or rnd.is_finished():
+        if not rnd:
             return GameMode.ROUND_FINISHED
         elif rnd.is_awaiting_pass():
             return GameMode.PASSING
         else:
-            assert rnd.is_in_progress()
             return GameMode.PLAYING
 
     def handle_background_click(self):
@@ -224,22 +223,20 @@ class HeartsApp(App):
 
     def play_card(self, card: Card):
         self.match.current_round.play_card(card)
-        if self.match.current_round.is_finished():
-            self.do_round_finished()
+        if self.match.current_round.did_trick_just_finish():
+            w = self.match.current_round.last_trick_winner()
+            print(f'Player {w} takes the trick')
+            print(f'Points: {capi.points_taken(self.match.current_round)}')
+            if w != 0 or self.match.current_round.is_finished():
+                Clock.schedule_once(lambda dt: self.handle_next_play(), 1.5)
         else:
-            if self.match.current_round.did_trick_just_finish():
-                w = self.match.current_round.last_trick_winner()
-                print(f'Player {w} takes the trick')
-                print(f'Points: {capi.points_taken(self.match.current_round)}')
-                if w != 0:
-                    Clock.schedule_once(lambda dt: self.handle_next_play(), 1.5)
-            else:
-                self.handle_next_play()
-            self.render()
+            self.handle_next_play()
+        self.render()
 
     def do_round_finished(self):
         assert self.match.current_round
         self.storage.record_round_stats(self.match.current_round)
+        print(f'Round stats: {self.storage.load_round_stats()}')
         print('Round over')
         self.match.finish_round()
         round_scores = self.match.score_history[-1]
@@ -249,11 +246,14 @@ class HeartsApp(App):
             print(f'Winners: {self.match.winners()}')
             self.storage.record_match_stats(self.match)
             self.storage.remove_current_match()
+            print(f'Match stats: {self.storage.load_match_stats()}')
         self.render()
 
     def handle_next_play(self):
         def doit():
             rnd = self.match.current_round
+            if rnd and rnd.is_finished():
+                self.do_round_finished()
             if not rnd or not rnd.is_in_progress():
                 return
             pnum = rnd.current_player_index()
@@ -383,7 +383,7 @@ class HeartsApp(App):
         if not self.match.current_round:
             return
         ct = self.match.current_round.current_trick
-        if ct and len(ct.cards) == 0 and len(self.match.current_round.prev_tricks) > 0:
+        if (ct is None or len(ct.cards) == 0) and len(self.match.current_round.prev_tricks) > 0:
             ct = self.match.current_round.prev_tricks[-1]
         if ct:
             # (0, 0) puts the bottom left of the card at the bottom left of the display.
