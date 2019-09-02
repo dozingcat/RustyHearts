@@ -119,6 +119,15 @@ class Round:
     def is_finished(self):
         return self.current_trick is None and len(self.prev_tricks) > 0
 
+    def points_taken(self):
+        return capi.points_taken(self)
+
+    def cards_taken(self) -> List[List[Card]]:
+        cards = [[] for _ in range(self.rules.num_players)]
+        for t in self.prev_tricks:
+            cards[t.winner].extend(t.cards)
+        return cards
+
 
 class Match:
     def __init__(self, rules: RuleSet):
@@ -137,7 +146,7 @@ class Match:
 
     def finish_round(self):
         assert self.current_round and self.current_round.is_finished()
-        self.score_history.append(capi.points_taken(self.current_round))
+        self.score_history.append(self.current_round.points_taken())
         self.current_round = None
 
     def start_next_round(self):

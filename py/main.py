@@ -225,7 +225,7 @@ class HeartsApp(App):
     def play_card(self, card: Card):
         self.match.current_round.play_card(card)
         if self.match.current_round.is_finished():
-            self.do_round_finished()
+            Clock.schedule_once(lambda dt: self.do_round_finished(), 1.5)
         else:
             if self.match.current_round.did_trick_just_finish():
                 w = self.match.current_round.last_trick_winner()
@@ -240,6 +240,7 @@ class HeartsApp(App):
     def do_round_finished(self):
         assert self.match.current_round
         self.storage.record_round_stats(self.match.current_round)
+        print(f'Round stats: {self.storage.load_round_stats()}')
         print('Round over')
         self.match.finish_round()
         round_scores = self.match.score_history[-1]
@@ -249,6 +250,7 @@ class HeartsApp(App):
             print(f'Winners: {self.match.winners()}')
             self.storage.record_match_stats(self.match)
             self.storage.remove_current_match()
+            print(f'Match stats: {self.storage.load_match_stats()}')
         self.render()
 
     def handle_next_play(self):
