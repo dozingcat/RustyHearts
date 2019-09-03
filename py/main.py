@@ -6,7 +6,6 @@ from typing import Iterable, List
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color, Ellipse, Rectangle
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.button import Button
 from kivy.uix.image import Image
@@ -20,6 +19,7 @@ import capi
 from cards import Card, Rank, Suit
 from hearts import Match, Round, RuleSet
 from storage import Storage
+import ui
 
 # Card images from https://github.com/hayeah/playing-cards-assets, MIT licensed.
 CARD_WIDTH_OVER_HEIGHT = 500.0 / 726
@@ -74,62 +74,6 @@ def passing_text(round: Round):
     return f'Pass {pi.num_cards} {cstr} {pi.direction} to the left'
 
 
-def set_rect_background(widget, color: Iterable[float]):
-    with widget.canvas.before:
-        Color(*color)
-        widget._commands_ = {
-            'background': Rectangle(size=widget.size)
-        }
-    def update(inst, value):
-        widget._commands_['background'].pos = inst.pos
-        widget._commands_['background'].size = inst.size
-    widget.bind(pos=update, size=update)
-
-def make_label(**kwargs):
-    '''Creates a label and binds its `text_size` to its `size`, allowing
-    alignment to work as expected. Defaults to center alignment.
-    See http://inclem.net/2014/07/05/kivy/kivy_label_text/
-    '''
-    kwargs.setdefault('halign', 'center')
-    kwargs.setdefault('valign', 'middle')
-    label = Label(**kwargs)
-    def update(inst, value):
-        label.text_size = label.size
-    label.bind(size=update)
-    return label
-
-def set_round_rect_background(widget, color: Iterable[float], radius: float):
-    diam = 2 * radius
-    with widget.canvas.before:
-        Color(*color)
-        circle_size = (diam, diam)
-        widget._commands_ = {
-            'left_strip': Rectangle(),
-            'right_strip': Rectangle(),
-            'main_rect': Rectangle(),
-            # 0 degrees is up, 90 is right.
-            'bottom_left_corner': Ellipse(size=circle_size, angle_start=180, angle_end=270),
-            'bottom_right_corner': Ellipse(size=circle_size, angle_start=90, angle_end=180),
-            'top_left_corner': Ellipse(size=circle_size, angle_start=270, angle_end=360),
-            'top_right_corner': Ellipse(size=circle_size, angle_start=0, angle_end=90),
-        }
-    def update(inst, value):
-        px, py = inst.pos
-        sx, sy = inst.size
-        c = widget._commands_
-        c['left_strip'].pos = (px, py + radius)
-        c['left_strip'].size = (radius, sy - diam)
-        c['right_strip'].pos = (px + sx - radius, py + radius)
-        c['right_strip'].size = (radius, sy - diam)
-        c['main_rect'].pos = (px + radius, py)
-        c['main_rect'].size = (sx - diam, sy)
-        c['bottom_left_corner'].pos = (px, py)
-        c['bottom_right_corner'].pos = (px + sx - diam, py)
-        c['top_left_corner'].pos = (px, py + sy - diam)
-        c['top_right_corner'].pos = (px + sx - diam, py + sy - diam)
-    widget.bind(pos=update, size=update)
-
-
 def rules_from_preferences(config):
     return RuleSet(
         points_on_first_trick=config.getboolean('Rules', 'points_on_first_trick'),
@@ -152,7 +96,7 @@ class HeartsApp(App):
     def build(self):
         self.storage = Storage(self.user_data_dir)
         self.layout = FloatLayout()
-        set_rect_background(self.layout, [0, 0.3, 0, 1])
+        ui.set_rect_background(self.layout, [0, 0.3, 0, 1])
         Window.on_resize = lambda *args: self.render()
         self.layout.bind(on_touch_down=lambda *args: self.handle_background_click())
         self.cards_to_pass = set()
@@ -404,58 +348,55 @@ class HeartsApp(App):
             font_size = self.default_font_size()
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
-            pass_label = make_label(
+            pass_label = ui.make_label(
                 text=passing_text(self.match.current_round),
                 font_size=font_size,
                 pos_hint={'x': 0.1, 'y': 0.5 - label_height_frac / 2},
                 size_hint=(0.8, label_height_frac))
-            set_round_rect_background(pass_label, [0, 0, 0, 0.5], 20)
+            ui.set_round_rect_background(pass_label, [0, 0, 0, 0.5], 20)
             self.layout.add_widget(pass_label)
 
     def render_score(self):
         mode = self.game_mode()
         if mode in [GameMode.ROUND_FINISHED, GameMode.MATCH_FINISHED]:
-            font_size = self.default_font_size()
-            label_height_px = font_size * 1.8
-            label_height_frac = label_height_px / self.layout.height
-
-            def make_score_row(text, scores):
-                row_layout = BoxLayout(orientation='horizontal')
-                # Spacers on left and right so text doesn't go to the edge.
-                def make_spacer():
-                    return Label(text='', size_hint=(0.2, None))
-                row_layout.add_widget(make_spacer())
-                label = make_label(
-                    text=text,
-                    font_size=font_size,
-                    size_hint=(len(scores), 1),
-                    halign='right')
-                row_layout.add_widget(label)
-                for s in scores:
-                    point_label = make_label(text=str(s), font_size=font_size, halign='right')
-                    row_layout.add_widget(point_label)
-                row_layout.add_widget(make_spacer())
-                return row_layout
-
-            winners = self.match.winners()
-            num_labels = 3 if winners else 2
-            score_layout = BoxLayout(
-                orientation='vertical',
-                pos_hint={'x': 0.05, 'y': 0.5 - (num_labels * label_height_frac) / 2},
-                size_hint=(0.9, num_labels * label_height_frac))
-            set_round_rect_background(score_layout, [0, 0, 0, 0.5], 20)
-            self.layout.add_widget(score_layout)
-            if winners:
-                if 0 in winners:
-                    score_text = 'You win!' if len(winners) == 1 else 'You tied for the win!'
-                else:
-                    score_text = 'You lost :('
-                result_label = make_label(text=score_text, font_size=font_size)
-                score_layout.add_widget(result_label)
             round_scores = self.match.score_history[-1]
             match_scores = self.match.total_scores()
-            score_layout.add_widget(make_score_row('Round score:', round_scores))
-            score_layout.add_widget(make_score_row('Total score:', match_scores))
+            winners = self.match.winners()
+            num_players = len(round_scores)
+
+            def ATC(text, **kwargs): return ui.AutosizeTableCell(text=text, **kwargs)
+
+            cells = []
+            if winners:
+                if 0 in winners:
+                    result_text = 'You win!' if len(winners) == 1 else 'You tied for the win!'
+                else:
+                    result_text = 'You lost :('
+                cells.append([ATC(result_text, relative_font_size=1.5)])
+
+            cells.append(
+                [ATC(' ', layout_weight=2)] +
+                [ATC(s) for s in ('You', 'West', 'North', 'East')]
+            )
+            cells.append(
+                [ATC('Round scores:', layout_weight=2)] +
+                [ATC(str(s)) for s in round_scores]
+            )
+            cells.append(
+                [ATC('Match scores:', layout_weight=2)] +
+                [ATC(str(s)) for s in match_scores]
+            )
+
+            avail_width = 0.9 * self.layout.width
+            avail_height = 0.9 * self.layout.height
+            autotable = ui.create_autosize_table(cells, avail_width, avail_height)
+            width_frac = autotable.width / self.layout.width
+            height_frac = autotable.height / self.layout.height
+            score_layout = autotable.layout
+            score_layout.pos_hint={'x': 0.5 - width_frac / 2, 'y': 0.5 - height_frac / 2}
+            score_layout.size_hint=(width_frac, height_frac)
+            ui.set_round_rect_background(score_layout, [0, 0, 0, 0.5], 20)
+            self.layout.add_widget(score_layout)
 
     def handle_image_click(self, card: Card):
         print(f'Click: {card.symbol_string()}')
@@ -494,7 +435,7 @@ class HeartsApp(App):
 
     def render_menu(self):
         menu_container = BoxLayout(orientation='vertical', pos_hint={'x': 0.1, 'y': 0.1}, size_hint=(0.8, 0.8))
-        set_round_rect_background(menu_container, [0, 0, 0, 0.9], 20)
+        ui.set_round_rect_background(menu_container, [0, 0, 0, 0.9], 20)
 
         def start_match():
             self.menu_mode = MenuMode.NOT_VISIBLE
@@ -525,7 +466,6 @@ class HeartsApp(App):
     def hide_menu(self):
         self.menu_mode = MenuMode.NOT_VISIBLE
         self.render()
-
 
 
 if __name__ == '__main__':
