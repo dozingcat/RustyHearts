@@ -107,10 +107,10 @@ def _required_size_for_cells(cells: List[List[AutosizeTableCell]],
             # Updating an existing label's font size doesn't affect its computed
             # size, so we have to recreate it if the font size changes.
             if label is None or last_font_size != fsize:
-                label = CoreLabel(font_size=fsize)
+                pad = fsize * cell.relative_padding
+                label = CoreLabel(font_size=fsize, padding=pad)
             last_font_size = fsize
             label.text = cell.text
-            label.padding = fsize * cell.relative_padding
             label.refresh()
             size = label.texture.size
             print(f'size: {size}')
@@ -131,7 +131,7 @@ def create_autosize_table(cells: List[List[AutosizeTableCell]],
         row_layout = BoxLayout(orientation='horizontal')
         for cell in row:
             # Use a slightly smaller font size than computed to avoid overflow.
-            fsize = base_font_size * scale * cell.relative_font_size * 0.8
+            fsize = base_font_size * scale * cell.relative_font_size * 0.9
             padding = (fsize * cell.relative_padding,) * 2
             label = make_label(
                 text=cell.text,

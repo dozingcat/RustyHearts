@@ -375,15 +375,15 @@ class HeartsApp(App):
                 cells.append([ATC(result_text, relative_font_size=1.5)])
 
             cells.append(
-                [ATC(' ', layout_weight=2)] +
+                [ATC(' ', layout_weight=1)] +
                 [ATC(s) for s in ('You', 'West', 'North', 'East')]
             )
             cells.append(
-                [ATC('Round scores:', layout_weight=2)] +
+                [ATC('Round:', layout_weight=1, halign='right')] +
                 [ATC(str(s)) for s in round_scores]
             )
             cells.append(
-                [ATC('Match scores:', layout_weight=2)] +
+                [ATC('Match:', layout_weight=1, halign='right')] +
                 [ATC(str(s)) for s in match_scores]
             )
 
