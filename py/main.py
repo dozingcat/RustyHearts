@@ -82,6 +82,14 @@ def rules_from_preferences(config):
     )
 
 
+def localize(s):
+    return s
+
+
+def ATC(text, **kwargs):
+    return ui.AutosizeTableCell(text=text, **kwargs)
+
+
 class HeartsApp(App):
     def build_config(self, config):
         config.setdefaults('Rules', {
@@ -101,6 +109,9 @@ class HeartsApp(App):
         self.layout.bind(on_touch_down=lambda *args: self.handle_background_click())
         self.cards_to_pass = set()
         self.menu_mode = MenuMode.NOT_VISIBLE
+        self.round_stats = None
+        self.match_stats = None
+        self.stats_visible = False
         self.match = self.storage.load_current_match()
         if self.match:
             Clock.schedule_once(lambda dt: self.render(), 0)
@@ -136,6 +147,10 @@ class HeartsApp(App):
 
     def handle_background_click(self):
         # This gets *all* clicks/touches, so we have to decide if we really want it.
+        if self.stats_visible:
+            self.stats_visible = False
+            self.render()
+            return
         mode = self.game_mode()
         if mode == GameMode.MATCH_FINISHED:
             self.start_match()
@@ -179,6 +194,8 @@ class HeartsApp(App):
 
     def do_round_finished(self):
         assert self.match.current_round
+        self.round_stats = None
+        self.match_stats = None
         self.storage.record_round_stats(self.match.current_round)
         print(f'Round stats: {self.storage.load_round_stats()}')
         print('Round over')
@@ -242,6 +259,7 @@ class HeartsApp(App):
         self.render_trick()
         self.render_message()
         self.render_score()
+        self.render_stats()
         self.render_controls()
 
     def render_hand(self):
@@ -344,6 +362,8 @@ class HeartsApp(App):
                 self.layout.add_widget(img)
 
     def render_message(self):
+        if self.stats_visible:
+            return
         if self.game_mode() == GameMode.PASSING:
             font_size = self.default_font_size()
             label_height_px = font_size * 1.8
@@ -357,6 +377,8 @@ class HeartsApp(App):
             self.layout.add_widget(pass_label)
 
     def render_score(self):
+        if self.stats_visible:
+            return
         mode = self.game_mode()
         if mode in [GameMode.ROUND_FINISHED, GameMode.MATCH_FINISHED]:
             round_scores = self.match.score_history[-1]
@@ -364,26 +386,24 @@ class HeartsApp(App):
             winners = self.match.winners()
             num_players = len(round_scores)
 
-            def ATC(text, **kwargs): return ui.AutosizeTableCell(text=text, **kwargs)
-
             cells = []
             if winners:
                 if 0 in winners:
-                    result_text = 'You win!' if len(winners) == 1 else 'You tied for the win!'
+                    result_text = localize(
+                        'You win!' if len(winners) == 1 else 'You tied for the win!')
                 else:
-                    result_text = 'You lost :('
+                    result_text = localize('You lost :(')
                 cells.append([ATC(result_text, relative_font_size=1.5)])
-
             cells.append(
-                [ATC(' ', layout_weight=1)] +
-                [ATC(s) for s in ('You', 'West', 'North', 'East')]
+                [ATC(' ')] +
+                [ATC(localize(s)) for s in ('You', 'West', 'North', 'East')]
             )
             cells.append(
-                [ATC('Round:', layout_weight=1, halign='right')] +
+                [ATC(localize('Round'), halign='left')] +
                 [ATC(str(s)) for s in round_scores]
             )
             cells.append(
-                [ATC('Match:', layout_weight=1, halign='right')] +
+                [ATC(localize('Match'), halign='left')] +
                 [ATC(str(s)) for s in match_scores]
             )
 
@@ -441,11 +461,11 @@ class HeartsApp(App):
             self.menu_mode = MenuMode.NOT_VISIBLE
             self.start_match()
 
-        new_match_button = Button(text='New Match')
+        new_match_button = Button(text=localize('New Match'))
         new_match_button.bind(on_press=lambda *args: start_match())
         menu_container.add_widget(new_match_button)
 
-        resume_button = Button(text='Resume Match')
+        resume_button = Button(text=localize('Resume Match'))
         resume_button.bind(on_press=lambda *args: self.hide_menu())
         menu_container.add_widget(resume_button)
 
@@ -453,11 +473,118 @@ class HeartsApp(App):
             self.hide_menu()
             self.open_settings()
 
-        settings_button = Button(text='Preferences')
+        settings_button = Button(text=localize('Preferences'))
         settings_button.bind(on_press=lambda *args: open_settings())
         menu_container.add_widget(settings_button)
-
         self.layout.add_widget(menu_container)
+
+        def show_stats():
+            self.hide_menu()
+            self.stats_visible = True
+            self.render()
+
+        resume_button = Button(text=localize('Statistics'))
+        resume_button.bind(on_press=lambda *args: show_stats())
+        menu_container.add_widget(resume_button)
+
+    def render_stats(self):
+        if not self.stats_visible:
+            return
+        if self.round_stats is None:
+            self.round_stats = self.storage.load_round_stats()
+        if self.match_stats is None:
+            self.match_stats = self.storage.load_match_stats()
+        round_jd = self.round_stats.stats_with_jd
+        round_nojd = self.round_stats.stats_without_jd
+        match_jd = self.match_stats.stats_with_jd
+        match_nojd = self.match_stats.stats_without_jd
+
+        def avg_str(fmt, n, d):
+            return '--' if d == 0 else (fmt % (n / d))
+
+        cells = []
+        cells.append([
+            ATC(' ', layout_weight=2),
+            ATC(localize('Total')),
+            ATC(localize('No JD')),
+            ATC(localize('With JD')),
+        ])
+        cells.append([
+            ATC(localize('Matches'), layout_weight=2, halign='left'),
+            ATC(str(match_nojd.num_matches + match_jd.num_matches)),
+            ATC(str(match_nojd.num_matches)),
+            ATC(str(match_jd.num_matches)),
+        ])
+        cells.append([
+            ATC(localize('Wins'), layout_weight=2, halign='left'),
+            ATC(str(match_nojd.num_wins + match_jd.num_wins)),
+            ATC(str(match_nojd.num_wins)),
+            ATC(str(match_jd.num_wins)),
+        ])
+        cells.append([
+            ATC(localize('Ties'), layout_weight=2, halign='left'),
+            ATC(str(match_nojd.num_ties + match_jd.num_ties)),
+            ATC(str(match_nojd.num_ties)),
+            ATC(str(match_jd.num_ties)),
+        ])
+        cells.append([
+            ATC(localize('Avg points/match'), layout_weight=2, halign='left'),
+            ATC(avg_str('%.1f',
+                match_nojd.total_points + match_jd.total_points,
+                match_nojd.num_matches + match_jd.num_matches)),
+            ATC(avg_str('%.1f', match_nojd.total_points, match_nojd.num_matches)),
+            ATC(avg_str('%.1f', match_jd.total_points, match_jd.num_matches)),
+        ])
+        cells.append([ATC(' ', relative_font_size=0.5)])
+        cells.append([
+            ATC(localize('Rounds'), layout_weight=2, halign='left'),
+            ATC(str(round_nojd.num_rounds + round_jd.num_rounds)),
+            ATC(str(round_nojd.num_rounds)),
+            ATC(str(round_jd.num_rounds)),
+        ])
+        cells.append([
+            ATC(localize('Avg points/round'), layout_weight=2, halign='left'),
+            ATC(avg_str('%.2f',
+                round_nojd.total_points + round_jd.total_points,
+                round_nojd.num_rounds + round_jd.num_rounds)),
+            ATC(avg_str('%.2f', round_nojd.total_points, round_nojd.num_rounds)),
+            ATC(avg_str('%.2f', round_jd.total_points, round_jd.num_rounds)),
+        ])
+        cells.append([
+            ATC(localize('Moonshots'), layout_weight=2, halign='left'),
+            ATC(str(round_nojd.num_moonshots + round_jd.num_moonshots)),
+            ATC(str(round_nojd.num_moonshots)),
+            ATC(str(round_jd.num_moonshots)),
+        ])
+        cells.append([
+            ATC(localize('Opp. moonshots'), layout_weight=2, halign='left'),
+            ATC(str(round_nojd.num_opponent_moonshots + round_jd.num_opponent_moonshots)),
+            ATC(str(round_nojd.num_opponent_moonshots)),
+            ATC(str(round_jd.num_opponent_moonshots)),
+        ])
+        cells.append([
+            ATC(localize('Queens taken'), layout_weight=2, halign='left'),
+            ATC(str(round_nojd.num_queen_spades + round_jd.num_queen_spades)),
+            ATC(str(round_nojd.num_queen_spades)),
+            ATC(str(round_jd.num_queen_spades)),
+        ])
+        cells.append([
+            ATC(localize('Jacks taken'), layout_weight=2, halign='left'),
+            ATC(str(round_jd.num_jack_diamonds)),
+            ATC('--'),
+            ATC(str(round_jd.num_jack_diamonds)),
+        ])
+
+        avail_width = 0.9 * self.layout.width
+        avail_height = 0.9 * self.layout.height
+        autotable = ui.create_autosize_table(cells, avail_width, avail_height)
+        width_frac = autotable.width / self.layout.width
+        height_frac = autotable.height / self.layout.height
+        stats_layout = autotable.layout
+        stats_layout.pos_hint={'x': 0.5 - width_frac / 2, 'y': 0.5 - height_frac / 2}
+        stats_layout.size_hint=(width_frac, height_frac)
+        ui.set_round_rect_background(stats_layout, [0, 0, 0, 0.7], 20)
+        self.layout.add_widget(stats_layout)
 
     def show_menu(self):
         self.menu_mode = MenuMode.VISIBLE
