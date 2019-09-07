@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 from enum import Enum, unique
+import random
 from typing import Iterable, List
 
+from kivy.animation import Animation
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
@@ -112,6 +114,9 @@ class HeartsApp(App):
         self.round_stats = None
         self.match_stats = None
         self.stats_visible = False
+        # Keep track of the last animated card so we don't repeat the animation
+        # if the window is re-rendered.
+        self.last_animated_card = None
         self.match = self.storage.load_current_match()
         if self.match:
             Clock.schedule_once(lambda dt: self.render(), 0)
@@ -189,7 +194,7 @@ class HeartsApp(App):
             if w != 0 or self.match.current_round.is_finished():
                 Clock.schedule_once(lambda dt: self.handle_next_play(), 1.5)
         else:
-            self.handle_next_play()
+            Clock.schedule_once(lambda dt: self.handle_next_play(), 0.5)
         self.render()
 
     def do_round_finished(self):
@@ -211,23 +216,21 @@ class HeartsApp(App):
         self.render()
 
     def handle_next_play(self):
-        def doit():
-            rnd = self.match.current_round
-            if rnd and rnd.is_finished():
-                self.do_round_finished()
-            if not rnd or not rnd.is_in_progress():
-                return
-            pnum = rnd.current_player_index()
-            if pnum == 0:
-                self.render()
-            else:
-                lc = capi.legal_plays(rnd)
-                best = capi.best_play(rnd)
-                print(f'Legal plays: {" ".join(c.symbol_string() for c in lc)}')
-                print(f'Player {pnum} plays {best.symbol_string()}')
-                self.play_card(best)
-
-        Clock.schedule_once(lambda dt: doit(), 0.1)
+        rnd = self.match.current_round
+        if rnd and rnd.is_finished():
+            self.do_round_finished()
+        if not rnd or not rnd.is_in_progress():
+            return
+        pnum = rnd.current_player_index()
+        if pnum == 0:
+            # This will highlight the player's legal cards.
+            self.render()
+        else:
+            lc = capi.legal_plays(rnd)
+            best = capi.best_play(rnd)
+            print(f'Legal plays: {" ".join(c.symbol_string() for c in lc)}')
+            print(f'Player {pnum} plays {best.symbol_string()}')
+            self.play_card(best)
 
     def set_or_unset_card_to_pass(self, card):
         if card in self.cards_to_pass:
@@ -349,17 +352,34 @@ class HeartsApp(App):
             ct = self.match.current_round.prev_tricks[-1]
         if ct:
             # (0, 0) puts the bottom left of the card at the bottom left of the display.
-            positions = [
-                {'x': 0.4, 'y': 0.35},
-                {'x': 0.1, 'y': 0.55},
-                {'x': 0.4, 'y': 0.75},
-                {'x': 0.7, 'y': 0.55},
+            # TODO: Have the player's card start from where it was in their hand.
+            start_positions = [
+                [lambda: 0.4, lambda: 0.05],
+                [lambda: -0.2, lambda: random.uniform(0.35, 0.75)],
+                [lambda: random.uniform(0.2, 0.6), lambda: 1.0],
+                [lambda: 1.0, lambda: random.uniform(0.35, 0.75)],
             ]
+            end_positions = [[0.4, 0.35], [0.1, 0.55], [0.4, 0.75], [0.7, 0.55]]
             for i, card in enumerate(ct.cards):
                 img_path = card_image_path(card)
                 pnum = (ct.leader + i) % self.match.current_round.rules.num_players
-                img = ImageButton(source=img_path, pos_hint=positions[pnum], size_hint=(0.2, 0.2))
-                self.layout.add_widget(img)
+                end_pos = (
+                    end_positions[pnum][0] * self.layout.width,
+                    end_positions[pnum][1] * self.layout.height)
+                show_anim = (self.last_animated_card != card and i == len(ct.cards) - 1)
+                if show_anim:
+                    start_pos = (
+                        start_positions[pnum][0]() * self.layout.width,
+                        start_positions[pnum][1]() * self.layout.height)
+                    img = ImageButton(source=img_path, pos=start_pos, size_hint=(0.2, 0.2))
+                    self.layout.add_widget(img)
+                    anim = Animation(x=end_pos[0], y=end_pos[1], t='out_cubic', duration=0.25)
+                    anim.start(img)
+                    self.last_animated_card = card
+                else:
+                    img = ImageButton(source=img_path, pos=end_pos, size_hint=(0.2, 0.2))
+                    self.layout.add_widget(img)
+
 
     def render_message(self):
         if self.stats_visible:
