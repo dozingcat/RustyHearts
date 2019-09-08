@@ -117,6 +117,10 @@ class HeartsApp(App):
         # Keep track of the last animated card so we don't repeat the animation
         # if the window is re-rendered.
         self.last_animated_card = None
+        # Keep track of where each card in the player's hand was drawn.
+        self.card_draw_locations = {}
+        # And where the card the player clicked on should animate from.
+        self.played_card_position = None
         self.match = self.storage.load_current_match()
         if self.match:
             Clock.schedule_once(lambda dt: self.render(), 0)
@@ -268,6 +272,7 @@ class HeartsApp(App):
     def render_hand(self):
         if not self.match.current_round:
             return
+        self.card_draw_locations.clear()
         hand = sorted_cards_for_display(self.match.current_round.players[0].hand)
         if self.layout.height > self.layout.width and len(hand) > 7:
             # For an odd number of cards, the top row should have the extra card.
@@ -342,6 +347,7 @@ class HeartsApp(App):
             img = ImageButton(source=img_path, size_hint=size, pos_hint=pos)
             img.opacity = opacity
             img.bind(on_press=lambda b, c=c: self.handle_image_click(c))
+            self.card_draw_locations[c] = (x, y)
             self.layout.add_widget(img)
 
     def render_trick(self):
@@ -352,9 +358,10 @@ class HeartsApp(App):
             ct = self.match.current_round.prev_tricks[-1]
         if ct:
             # (0, 0) puts the bottom left of the card at the bottom left of the display.
-            # TODO: Have the player's card start from where it was in their hand.
+            # Have player's cards start from where they were last drawn in the hand.
+            played_card_pos = self.played_card_position or [0.4, 0.05]
             start_positions = [
-                [lambda: 0.4, lambda: 0.05],
+                [lambda: played_card_pos[0], lambda: played_card_pos[1]],
                 [lambda: -0.2, lambda: random.uniform(0.35, 0.75)],
                 [lambda: random.uniform(0.2, 0.6), lambda: 1.0],
                 [lambda: 1.0, lambda: random.uniform(0.35, 0.75)],
@@ -448,6 +455,8 @@ class HeartsApp(App):
                 legal = capi.legal_plays(self.match.current_round)
                 if self.match.current_round.current_player_index() == 0:
                     if card in legal:
+                        # Record where this card was so we can animate from it. This is ugly.
+                        self.played_card_position = self.card_draw_locations.get(card)
                         self.play_card(card)
                     else:
                         print(f'Illegal play!')

@@ -231,7 +231,7 @@ class Storage:
                         stats.total_points += points[0]
                         stats.total_opponent_points += (sum(points) - points[0])
                         stats.num_moonshots += (1 if shooter == 0 else 0)
-                        stats.num_opponent_moonshots = (
+                        stats.num_opponent_moonshots += (
                             1 if shooter is not None and shooter != 0 else 0)
                         # Don't count hearts or queen if the player shot.
                         stats.num_queen_spades += (1 if took_qs and shooter != 0 else 0)
