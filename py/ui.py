@@ -89,6 +89,7 @@ class AutosizeTableCell:
 @dataclass
 class AutosizeTableResult:
     layout: BoxLayout
+    base_font_size: float
     width: float
     height: float
 
@@ -115,7 +116,6 @@ def _required_size_for_cells(cells: List[List[AutosizeTableCell]],
             label.text = cell.text
             label.refresh()
             size = label.texture.size
-            print(f'size: {size}')
             required_width = max(required_width, size[0] * wrat)
             row_height = max(row_height, size[1])
         required_height += row_height
@@ -125,10 +125,11 @@ def _required_size_for_cells(cells: List[List[AutosizeTableCell]],
 def create_autosize_table(cells: List[List[AutosizeTableCell]],
                           max_width, max_height) -> AutosizeTableResult:
     table = BoxLayout(orientation='vertical')
-    base_font_size = 20
-    base_size = _required_size_for_cells(cells, base_font_size)
-    scale = min(max_width / base_size[0], max_height / base_size[1])
-    print(f'base_size: {base_size}, scale: {scale}')
+    test_base_font_size = 20
+    actual_size = _required_size_for_cells(cells, test_base_font_size)
+    scale = min(max_width / actual_size[0], max_height / actual_size[1])
+    base_font_size = test_base_font_size * scale
+    print(f'base_size: {actual_size}, scale: {scale}')
     for row in cells:
         # The height of each row is proportional to its maximum font size, so
         # we can use that as the size hint.
@@ -136,7 +137,7 @@ def create_autosize_table(cells: List[List[AutosizeTableCell]],
         row_layout = BoxLayout(orientation='horizontal', size_hint=(1, max_font_size))
         for cell in row:
             # Use a slightly smaller font size than computed to avoid overflow.
-            fsize = base_font_size * scale * cell.relative_font_size * 0.9
+            fsize = base_font_size * cell.relative_font_size * 0.9
             padding = (fsize * cell.relative_padding,) * 2
             label = make_label(
                 text=cell.text,
@@ -149,6 +150,7 @@ def create_autosize_table(cells: List[List[AutosizeTableCell]],
             row_layout.add_widget(label)
         table.add_widget(row_layout)
 
-    actual_width = base_size[0] * scale
-    actual_height = base_size[1] * scale
-    return AutosizeTableResult(layout=table, width=actual_width, height=actual_height)
+    actual_width = actual_size[0] * scale
+    actual_height = actual_size[1] * scale
+    return AutosizeTableResult(
+        layout=table, width=actual_width, height=actual_height, base_font_size=base_font_size)
