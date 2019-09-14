@@ -326,9 +326,9 @@ mod test {
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
-    fn c(s: &str) -> Card {
-        return Card::from(s).unwrap();
-    }
+    fn c(s: &str) -> Card {Card::from(s).unwrap()}
+
+    fn cv(s: &str) -> Vec<Card> {cards_from_str(s).unwrap()}
 
     #[test]
     fn test_parse() {
@@ -421,12 +421,7 @@ mod test {
     #[test]
     fn test_card_distribution_void_suits() {
         let mut rng: StdRng = SeedableRng::seed_from_u64(42);
-        let cards = vec![
-            c("2S"), c("3S"), c("4S"),
-            c("2H"), c("3H"), c("4H"),
-            c("2D"), c("3D"), c("4D"),
-            c("2C"), c("3C"), c("4C"),
-        ];
+        let cards = cv("2C 2D 2H 2S 3C 3D 3H 3S 4C 4D 4H 4S");
         let mut constraints = make_constraints(4, 3);
         constraints[0].voided_suits.insert(Suit::Spades);
         constraints[2].voided_suits.insert(Suit::Spades);
@@ -436,7 +431,7 @@ mod test {
             cards: cards,
             constraints: constraints,
         };
-        let dist = possible_card_distribution(&req, &mut rng).unwrap();
+        let dist = _possible_card_distribution(&req, &mut rng).unwrap();
         assert_eq!(dist.len(), 4);
         for cards in dist.iter() {
             assert_eq!(cards.len(), 3);
@@ -449,12 +444,7 @@ mod test {
     #[test]
     fn test_card_distribution_fixed_cards() {
         let mut rng: StdRng = SeedableRng::seed_from_u64(42);
-        let cards = vec![
-            c("2S"), c("3S"), c("4S"),
-            c("2H"), c("3H"), c("4H"),
-            c("2D"), c("3D"), c("4D"),
-            c("2C"), c("3C"), c("4C"),
-        ];
+        let cards = cv("2C 2D 2H 2S 3C 3D 3H 3S 4C 4D 4H 4S");
         let mut constraints = make_constraints(4, 3);
         constraints[1].fixed_cards.insert(c("2H"));
         constraints[3].fixed_cards.insert(c("3D"));
@@ -473,5 +463,25 @@ mod test {
         assert!(dist[3].contains(&c("3D")));
         assert!(dist[3].contains(&c("4D")));
         assert!(!dist[3].contains(&c("AD")));
+    }
+
+    #[test] #[ignore]
+    fn test_card_distribution_combination() {
+        let mut rng: StdRng = SeedableRng::seed_from_u64(42);
+        let cards = cv("AS KS QS JS TS 9S AH KH QH");
+        let mut constraints = make_constraints(3, 3);
+        constraints[1].voided_suits.insert(Suit::Hearts);
+        constraints[2].voided_suits.insert(Suit::Hearts);
+        let req = CardDistributionRequest {
+            cards: cards,
+            constraints: constraints,
+        };
+        // Players 1 and 2 have no hearts, so they must have all the spades
+        // between them, so player 0 can't have spades. Unfortunately the
+        // algorithm can't determine this yet.
+        let dist = _possible_card_distribution(&req, &mut rng).unwrap();
+        assert!(dist[0].contains(&c("AH")));
+        assert!(dist[0].contains(&c("KH")));
+        assert!(dist[0].contains(&c("QH")));
     }
 }

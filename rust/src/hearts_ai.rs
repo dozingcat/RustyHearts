@@ -362,7 +362,7 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
             // Led hearts when they weren't broken, so must have had no other choice.
             hearts_broken = true;
             voided_suits[leader].insert(Suit::Spades);
-            voided_suits[leader].insert(Suit::Hearts);
+            voided_suits[leader].insert(Suit::Diamonds);
             voided_suits[leader].insert(Suit::Clubs);
         }
         seen_cards.insert(trick_cards[0]);
