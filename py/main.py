@@ -15,6 +15,7 @@ from kivy.uix.label import Label
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.scrollview import ScrollView
 from kivy.uix.settings import Settings
 
 import capi
@@ -48,16 +49,12 @@ class GameMode(Enum):
 
 
 @unique
-class MenuMode(Enum):
-    NOT_VISIBLE = 0
-    VISIBLE = 1
-
-
-@unique
-class StatsMode(Enum):
-    NOT_VISIBLE = 0
-    VISIBLE = 1
-    CLEARING = 2
+class UIMode(Enum):
+    GAME = 1
+    MENU = 2
+    STATS = 3
+    STATS_CLEARING = 4
+    HELP = 5
 
 
 def sorted_cards_for_display(cards: Iterable[Card]):
@@ -116,10 +113,10 @@ class HeartsApp(App):
         ui.set_rect_background(self.layout, [0, 0.3, 0, 1])
         Window.on_resize = lambda *args: self.render()
         self.cards_to_pass = set()
-        self.menu_mode = MenuMode.NOT_VISIBLE
-        self.stats_mode = StatsMode.NOT_VISIBLE
+        self.ui_mode = UIMode.GAME
         self.round_stats = None
         self.match_stats = None
+        self.help_text = None
         # Keep track of the last animated card so we don't repeat the animation
         # if the window is re-rendered.
         self.last_animated_card = None
@@ -262,6 +259,7 @@ class HeartsApp(App):
         self.render_score()
         self.render_stats()
         self.render_controls()
+        self.render_help()
 
     def render_hand(self):
         if not self.match.current_round:
@@ -340,7 +338,7 @@ class HeartsApp(App):
                 self.layout.add_widget(black)
             img = ImageButton(source=img_path, size_hint=size, pos_hint=pos)
             img.opacity = opacity
-            img.bind(on_press=lambda b, c=c: self.handle_image_click(c))
+            img.bind(on_press=lambda b, c=c: self.handle_card_click(c))
             self.card_draw_locations[c] = (x, y)
             self.layout.add_widget(img)
 
@@ -383,7 +381,7 @@ class HeartsApp(App):
 
 
     def render_message(self):
-        if self.stats_mode != StatsMode.NOT_VISIBLE:
+        if self.ui_mode != UIMode.GAME:
             return
         if self.game_mode() == GameMode.PASSING:
             font_size = self.default_font_size()
@@ -398,7 +396,7 @@ class HeartsApp(App):
             self.layout.add_widget(pass_label)
 
     def render_score(self):
-        if self.stats_mode != StatsMode.NOT_VISIBLE:
+        if self.ui_mode != UIMode.GAME:
             return
         mode = self.game_mode()
         if mode in [GameMode.ROUND_FINISHED, GameMode.MATCH_FINISHED]:
@@ -428,7 +426,7 @@ class HeartsApp(App):
                 [ATC(str(s)) for s in match_scores]
             )
 
-            button_height_frac = 0.225 if winners else 0.3
+            button_height_frac = 0.25 if winners else 0.33
             avail_width = 0.9 * self.layout.width
             avail_height = 0.9 * (1 - button_height_frac) * self.layout.height
             autotable = ui.create_autosize_table(cells, avail_width, avail_height)
@@ -462,7 +460,9 @@ class HeartsApp(App):
             self.layout.add_widget(score_container)
 
 
-    def handle_image_click(self, card: Card):
+    def handle_card_click(self, card: Card):
+        if self.ui_mode != UIMode.GAME:
+            return
         print(f'Click: {card.symbol_string()}')
         mode = self.game_mode()
         if mode == GameMode.PASSING:
@@ -480,10 +480,10 @@ class HeartsApp(App):
         return True
 
     def render_controls(self):
-        if self.menu_mode == MenuMode.NOT_VISIBLE:
-            self.render_menu_icon()
-        elif self.menu_mode == MenuMode.VISIBLE:
+        if self.ui_mode == UIMode.MENU:
             self.render_menu()
+        else:
+            self.render_menu_icon()
 
     def render_menu_icon(self):
         pos = {'x': 0.0, 'y': 0.9}
@@ -504,19 +504,19 @@ class HeartsApp(App):
         ui.set_round_rect_background(menu_container, [0, 0, 0, 0.9], 20)
 
         def start_match():
-            self.menu_mode = MenuMode.NOT_VISIBLE
+            self.ui_mode = UIMode.GAME
             self.start_match()
+
+        resume_button = Button(text=localize('Resume Match'))
+        resume_button.bind(on_release=lambda *args: self.return_to_game())
+        menu_container.add_widget(resume_button)
 
         new_match_button = Button(text=localize('New Match'))
         new_match_button.bind(on_release=lambda *args: start_match())
         menu_container.add_widget(new_match_button)
 
-        resume_button = Button(text=localize('Resume Match'))
-        resume_button.bind(on_release=lambda *args: self.hide_menu())
-        menu_container.add_widget(resume_button)
-
         def open_settings():
-            self.hide_menu()
+            self.return_to_game()
             self.open_settings()
 
         settings_button = Button(text=localize('Preferences'))
@@ -525,16 +525,24 @@ class HeartsApp(App):
         self.layout.add_widget(menu_container)
 
         def show_stats():
-            self.hide_menu()
-            self.stats_mode = StatsMode.VISIBLE
+            self.ui_mode = UIMode.STATS
             self.render()
 
         resume_button = Button(text=localize('Statistics'))
         resume_button.bind(on_release=lambda *args: show_stats())
         menu_container.add_widget(resume_button)
 
+        def show_help():
+            self.ui_mode = UIMode.HELP
+            self.render()
+
+        help_button = Button(text=localize('About / Help'))
+        help_button.bind(on_release=lambda *args: show_help())
+        menu_container.add_widget(help_button)
+
+
     def render_stats(self):
-        if self.stats_mode == StatsMode.NOT_VISIBLE:
+        if self.ui_mode != UIMode.STATS and self.ui_mode != UIMode.STATS_CLEARING:
             return
         if self.round_stats is None:
             self.round_stats = self.storage.load_round_stats()
@@ -621,7 +629,7 @@ class HeartsApp(App):
             ATC(str(round_jd.num_jack_diamonds)),
         ])
 
-        button_height_frac = 0.125
+        button_height_frac = 0.15
         avail_width = 0.9 * self.layout.width
         avail_height = 0.9 * (1 - button_height_frac) * self.layout.height
         autotable = ui.create_autosize_table(cells, avail_width, avail_height)
@@ -637,28 +645,28 @@ class HeartsApp(App):
         stats_container.add_widget(stats_layout)
 
         def close_stats():
-            self.stats_mode = StatsMode.NOT_VISIBLE
+            self.ui_mode = UIMode.GAME
             self.render()
 
-        def clear_stats():
-            self.stats_mode = StatsMode.CLEARING
+        def ask_to_clear_stats():
+            self.ui_mode = UIMode.STATS_CLEARING
             self.render()
 
         def cancel_clear_stats():
-            self.stats_mode = StatsMode.VISIBLE
+            self.ui_mode = UIMode.STATS
             self.render()
 
         def confirm_clear_stats():
             self.storage.clear_stats()
             self.round_stats = None
             self.match_stats = None
-            self.stats_mode = StatsMode.VISIBLE
+            self.ui_mode = UIMode.STATS
             self.render()
 
         button_y_pos = button_height_frac / 6
         button_height = button_height_frac * 2 / 3
 
-        if self.stats_mode == StatsMode.VISIBLE:
+        if self.ui_mode == UIMode.STATS:
             close_button = Button(
                 text=localize('Continue'),
                 font_size=autotable.base_font_size,
@@ -672,10 +680,10 @@ class HeartsApp(App):
                 font_size=autotable.base_font_size,
                 pos_hint={'x': 0.55, 'y': button_y_pos},
                 size_hint=(0.4, button_height))
-            clear_button.bind(on_release=lambda *args: clear_stats())
+            clear_button.bind(on_release=lambda *args: ask_to_clear_stats())
             stats_container.add_widget(clear_button)
         else:
-            assert self.stats_mode == StatsMode.CLEARING
+            assert self.ui_mode == UIMode.STATS_CLEARING
             confirm_label = ui.make_label(
                 text=localize('Really clear stats?'),
                 font_size=autotable.base_font_size,
@@ -705,13 +713,59 @@ class HeartsApp(App):
         self.layout.add_widget(stats_container)
 
     def show_menu(self):
-        self.menu_mode = MenuMode.VISIBLE
+        self.ui_mode = UIMode.MENU
         self.render()
 
-    def hide_menu(self):
-        self.menu_mode = MenuMode.NOT_VISIBLE
+    def return_to_game(self):
+        self.ui_mode = UIMode.GAME
         self.render()
 
+    def render_help(self):
+        if self.ui_mode != UIMode.HELP:
+            return
+        about_height = 0.9 * self.layout.height
+        about_width = min(0.9 * self.layout.width, 1.5 * about_height)
+        about_width_frac = about_width / self.layout.width
+        about_height_frac = about_height / self.layout.height
+        about_container = FloatLayout(
+            pos_hint={'x': 0.5 - about_width_frac / 2, 'y': 0.5 - about_height_frac / 2},
+            size_hint=(about_width_frac, about_height_frac))
+        ui.set_round_rect_background(about_container, [0, 0, 0, 0.9], 20)
+        self.layout.add_widget(about_container)
+
+        if self.help_text is None:
+            with open('about.txt') as f:
+                self.help_text = f.read()
+
+        scrollview_height_frac = 0.85
+        sv = ScrollView(
+            size_hint=(1, None),
+            size=(about_width, scrollview_height_frac * about_height),
+            pos_hint={'x': 0.0, 'y': 1 - scrollview_height_frac})
+        about_container.add_widget(sv)
+        font_size = max(about_width, about_height) / 30
+        label = Label(
+            text=self.help_text,
+            markup=True,
+            font_size=font_size,
+            size_hint=(None, None),
+            text_size=(about_width, None),
+            padding=(20, 20))
+        def update_label(*args):
+            label.size = label.texture_size
+        label.bind(pos=update_label)
+        sv.add_widget(label)
+
+        button_height_frac = (1 - scrollview_height_frac) * 2 / 3
+        button_y = (1 - scrollview_height_frac) / 6
+        button_font_size = font_size
+        button = Button(
+            text=localize('Continue'),
+            font_size=button_font_size,
+            size_hint=(0.4, button_height_frac),
+            pos_hint={'x': 0.3, 'y': button_y})
+        button.bind(on_release=lambda *args: self.return_to_game())
+        about_container.add_widget(button)
 
 if __name__ == '__main__':
     HeartsApp().run()
