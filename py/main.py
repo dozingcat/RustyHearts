@@ -113,7 +113,7 @@ class HeartsApp(App):
         ui.set_rect_background(self.layout, [0, 0.3, 0, 1])
         Window.on_resize = lambda *args: self.render()
         self.cards_to_pass = set()
-        self.ui_mode = UIMode.HELP
+        self.ui_mode = UIMode.GAME
         self.round_stats = None
         self.match_stats = None
         self.help_text = None
