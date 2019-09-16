@@ -111,12 +111,14 @@ class HeartsApp(App):
         self.storage = Storage(self.user_data_dir)
         self.layout = FloatLayout()
         ui.set_rect_background(self.layout, [0, 0.3, 0, 1])
-        Window.on_resize = lambda *args: self.render()
+        Window.on_resize = lambda *args: Clock.schedule_once(lambda dt: self.do_resize())
+        self.resize_render_event = None
         self.cards_to_pass = set()
         self.ui_mode = UIMode.GAME
         self.round_stats = None
         self.match_stats = None
         self.help_text = None
+        self.use_kivy_settings = False
         # Keep track of the last animated card so we don't repeat the animation
         # if the window is re-rendered.
         self.last_animated_card = None
@@ -132,6 +134,19 @@ class HeartsApp(App):
         else:
             Clock.schedule_once(lambda dt: self.start_match(), 0)
         return self.layout
+
+    def do_resize(self):
+        # When running on a phone, this method is called when the screen
+        # orientation changes. Calling render() right away doesn't correctly
+        # update the UI; it seems we have to wait a bit for the orientation to
+        # be fully recongized. So we call render() immediately for desktop,
+        # and again after a delay, and hopefully at least one of them will work.
+        # Also cancel any previous pending render() so we don't make redundant
+        # calls if the size is rapidly changing.
+        if self.resize_render_event:
+            self.resize_render_event.cancel()
+        self.render()
+        self.resize_render_event = Clock.schedule_once(lambda dt: self.render(), 1)
 
     def on_pause(self):
         print('Pause!')
