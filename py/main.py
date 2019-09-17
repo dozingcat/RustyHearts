@@ -517,16 +517,17 @@ class HeartsApp(App):
     def render_menu(self):
         menu_container = BoxLayout(orientation='vertical', pos_hint={'x': 0.1, 'y': 0.1}, size_hint=(0.8, 0.8))
         ui.set_round_rect_background(menu_container, [0, 0, 0, 0.9], 20)
+        font_size = min(self.layout.height / 12, self.layout.width / 10)
 
         def start_match():
             self.ui_mode = UIMode.GAME
             self.start_match()
 
-        resume_button = Button(text=localize('Resume Match'))
+        resume_button = Button(text=localize('Resume Match'), font_size=font_size)
         resume_button.bind(on_release=lambda *args: self.return_to_game())
         menu_container.add_widget(resume_button)
 
-        new_match_button = Button(text=localize('New Match'))
+        new_match_button = Button(text=localize('New Match'), font_size=font_size)
         new_match_button.bind(on_release=lambda *args: start_match())
         menu_container.add_widget(new_match_button)
 
@@ -534,7 +535,7 @@ class HeartsApp(App):
             self.return_to_game()
             self.open_settings()
 
-        settings_button = Button(text=localize('Preferences'))
+        settings_button = Button(text=localize('Preferences'), font_size=font_size)
         settings_button.bind(on_release=lambda *args: open_settings())
         menu_container.add_widget(settings_button)
         self.layout.add_widget(menu_container)
@@ -543,7 +544,7 @@ class HeartsApp(App):
             self.ui_mode = UIMode.STATS
             self.render()
 
-        resume_button = Button(text=localize('Statistics'))
+        resume_button = Button(text=localize('Statistics'), font_size=font_size)
         resume_button.bind(on_release=lambda *args: show_stats())
         menu_container.add_widget(resume_button)
 
@@ -551,7 +552,7 @@ class HeartsApp(App):
             self.ui_mode = UIMode.HELP
             self.render()
 
-        help_button = Button(text=localize('About / Help'))
+        help_button = Button(text=localize('About / Help'), font_size=font_size)
         help_button.bind(on_release=lambda *args: show_help())
         menu_container.add_widget(help_button)
 
