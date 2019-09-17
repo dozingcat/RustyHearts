@@ -1,10 +1,10 @@
 use crate::card::*;
 use crate::hearts;
 
+use rand::seq::SliceRandom;
+use rand::Rng;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use rand::Rng;
-use rand::seq::SliceRandom;
 
 #[derive(Debug, Copy, Clone)]
 pub struct MonteCarloParams {
@@ -21,7 +21,7 @@ pub enum CardToPlayStrategy {
     MonteCarloMixedRandomAvoidPoints(f64, MonteCarloParams),
 }
 
-pub struct CardToPlayRequest  {
+pub struct CardToPlayRequest {
     pub rules: hearts::RuleSet,
     pub scores_before_round: Vec<i32>,
     pub hand: Vec<Card>,
@@ -97,7 +97,11 @@ pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
                 let passing_right = ((req.direction as usize) == req.rules.num_players - 1);
                 let has_queen = ranks.contains(&Rank::QUEEN);
                 let has_low_spade = (ranks[ranks.len() - 1] < Rank::QUEEN);
-                return (if passing_right && has_queen && has_low_spade {cval - 5} else {100});
+                return (if passing_right && has_queen && has_low_spade {
+                    cval - 5
+                } else {
+                    100
+                });
             }
             Suit::Hearts => {
                 return cval + lowest_rank_in_suit;
@@ -109,7 +113,7 @@ pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
                 // 2C is "higher" than AC for purposes of passing.
                 // TODO: We probably want to pass AC less often because winning
                 // the first trick can be helpful and doesn't risk points.
-                let adj_rank = (if cval == 2 {14} else {cval - 1});
+                let adj_rank = (if cval == 2 { 14 } else { cval - 1 });
                 if lowest_rank_in_suit == 2 {
                     // Probably pass singleton 2C.
                     if ranks.len() == 1 {
@@ -117,15 +121,17 @@ pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
                     }
                     let second_lowest_club = ranks[ranks.len() - 2].value as i32;
                     return adj_rank + second_lowest_club;
-                }
-                else {
+                } else {
                     return adj_rank + lowest_rank_in_suit - 1;
                 }
             }
         }
     }
     for &c in req.hand.iter() {
-        card_danger.insert(c, danger_for_card(&c, suit_ranks.get(&c.suit).unwrap(), req));
+        card_danger.insert(
+            c,
+            danger_for_card(&c, suit_ranks.get(&c.suit).unwrap(), req),
+        );
     }
     let mut sorted_cards: Vec<Card> = req.hand.clone();
     sorted_cards.sort_by_key(|c| -card_danger.get(c).unwrap());
@@ -147,12 +153,17 @@ impl CardToPlayRequest {
     }
 
     pub fn current_player_index(&self) -> usize {
-        return
-            (self.current_trick.leader + self.current_trick.cards.len()) % self.rules.num_players;
+        return (self.current_trick.leader + self.current_trick.cards.len())
+            % self.rules.num_players;
     }
 
     pub fn legal_plays(&self) -> Vec<Card> {
-        return hearts::legal_plays(&self.hand, &self.current_trick, &self.prev_tricks, &self.rules);
+        return hearts::legal_plays(
+            &self.hand,
+            &self.current_trick,
+            &self.prev_tricks,
+            &self.rules,
+        );
     }
 }
 
@@ -162,38 +173,53 @@ fn is_nonrecursive(strategy: &CardToPlayStrategy) -> bool {
         CardToPlayStrategy::AvoidPoints => true,
         CardToPlayStrategy::MixedRandomAvoidPoints(p_random) => true,
         _ => false,
-    }
+    };
 }
 
 fn choose_card_nonrecursive(
-        req: &CardToPlayRequest, strategy: &CardToPlayStrategy, mut rng: impl Rng) -> Card {
+    req: &CardToPlayRequest,
+    strategy: &CardToPlayStrategy,
+    mut rng: impl Rng,
+) -> Card {
     return match strategy {
         CardToPlayStrategy::Random => choose_card_random(req, rng),
         CardToPlayStrategy::AvoidPoints => choose_card_avoid_points(req, rng),
-        CardToPlayStrategy::MixedRandomAvoidPoints(p_random) =>
-            if rng.gen_range(0.0_f64, 1.0_f64) < *p_random
-                {choose_card_random(req, rng)}
-            else
-                {choose_card_avoid_points(req, rng)},
+        CardToPlayStrategy::MixedRandomAvoidPoints(p_random) => {
+            if rng.gen_range(0.0_f64, 1.0_f64) < *p_random {
+                choose_card_random(req, rng)
+            } else {
+                choose_card_avoid_points(req, rng)
+            }
+        }
         _ => panic!("Invalid strategy"),
     };
 }
 
 pub fn choose_card(
-        req: &CardToPlayRequest, strategy: &CardToPlayStrategy, mut rng: impl Rng) -> Card {
+    req: &CardToPlayRequest,
+    strategy: &CardToPlayStrategy,
+    mut rng: impl Rng,
+) -> Card {
     if is_nonrecursive(strategy) {
-        return choose_card_nonrecursive(req, strategy, &mut rng)
+        return choose_card_nonrecursive(req, strategy, &mut rng);
     }
     match strategy {
-        CardToPlayStrategy::MonteCarloRandom(mc_params) =>
-            choose_card_monte_carlo(req, *mc_params, &CardToPlayStrategy::Random, &mut rng),
+        CardToPlayStrategy::MonteCarloRandom(mc_params) => {
+            choose_card_monte_carlo(req, *mc_params, &CardToPlayStrategy::Random, &mut rng)
+        }
 
-        CardToPlayStrategy::MonteCarloAvoidPoints(mc_params) =>
-            choose_card_monte_carlo(req, *mc_params, &CardToPlayStrategy::AvoidPoints, &mut rng),
+        CardToPlayStrategy::MonteCarloAvoidPoints(mc_params) => {
+            choose_card_monte_carlo(req, *mc_params, &CardToPlayStrategy::AvoidPoints, &mut rng)
+        }
 
-        CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(p_rand, mc_params) =>
+        CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(p_rand, mc_params) => {
             choose_card_monte_carlo(
-                req, *mc_params, &CardToPlayStrategy::MixedRandomAvoidPoints(*p_rand), &mut rng),
+                req,
+                *mc_params,
+                &CardToPlayStrategy::MixedRandomAvoidPoints(*p_rand),
+                &mut rng,
+            )
+        }
 
         _ => panic!("Unknown strategy"),
     }
@@ -233,7 +259,8 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
         assert!(legal_suits.len() == 1);
         // Play high on first trick if no points allowed.
         if req.prev_tricks.is_empty() && !req.rules.points_on_first_trick {
-            return *legal_plays.iter()
+            return *legal_plays
+                .iter()
                 .filter(|c| **c != hearts::QUEEN_OF_SPADES)
                 .max_by(|a, b| a.rank.cmp(&b.rank))
                 .unwrap();
@@ -253,55 +280,60 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
             }
             // Win without taking points if possible.
             if trick_points <= 0 {
-                return *legal_plays.iter()
+                return *legal_plays
+                    .iter()
                     .filter(|c| **c != hearts::QUEEN_OF_SPADES)
                     .max_by(|a, b| a.rank.cmp(&b.rank))
                     .unwrap();
             }
             // Avoid taking the trick if we can; if we can't play highest.
             // If playing with JD rule, don't play it under a higher diamond.
-            let highest_nonwinner = legal_plays.iter()
+            let highest_nonwinner = legal_plays
+                .iter()
                 .filter(|c| c.rank < high_card.rank)
                 .filter(|c| !(has_jd && **c == hearts::JACK_OF_DIAMONDS))
                 .max_by(|a, b| a.rank.cmp(&b.rank));
             return match highest_nonwinner {
                 Some(c) => *c,
-                None => *legal_plays.iter()
+                None => *legal_plays
+                    .iter()
                     .filter(|c| **c != hearts::QUEEN_OF_SPADES)
                     .max_by(|a, b| a.rank.cmp(&b.rank))
                     .unwrap(),
             };
-        }
-        else {
+        } else {
             // Play just under the winner if possible (but not JD if it's -10 points).
             // If we can't, play the lowest (other than QS).
-            let highest_nonwinner = legal_plays.iter()
+            let highest_nonwinner = legal_plays
+                .iter()
                 .filter(|c| c.rank < high_card.rank)
                 .filter(|c| !(has_jd && **c == hearts::JACK_OF_DIAMONDS))
                 .max_by(|a, b| a.rank.cmp(&b.rank));
             return match highest_nonwinner {
                 Some(c) => *c,
                 // This will play JD if possible, which is probably ok.
-                None => *legal_plays.iter()
+                None => *legal_plays
+                    .iter()
                     .filter(|c| **c != hearts::QUEEN_OF_SPADES)
                     .min_by(|a, b| a.rank.cmp(&b.rank))
                     .unwrap(),
             };
         }
-    }
-    else {
+    } else {
         // Ditch QS if possible, otherwise highest heart, otherwise highest other card.
         if has_qs {
             return hearts::QUEEN_OF_SPADES;
         }
         if legal_suits.contains(&Suit::Hearts) {
-            return *legal_plays.iter()
+            return *legal_plays
+                .iter()
                 .filter(|c| c.suit == Suit::Hearts)
                 .max_by(|a, b| a.rank.cmp(&b.rank))
                 .unwrap();
         }
         // Don't play JD if we want to take it.
-        return *legal_plays.iter()
+        return *legal_plays
+            .iter()
             .filter(|c| !(has_jd && **c == hearts::JACK_OF_DIAMONDS))
             .max_by(|a, b| a.rank.cmp(&b.rank))
             .unwrap();
@@ -326,8 +358,8 @@ fn do_rollout(round: &mut hearts::Round, strategy: &CardToPlayStrategy, mut rng:
         assert!(legal_plays.len() > 0);
         // We have to split the strategies into recursive and nonrecursive, otherwise the compiler
         // tries to infinitely recurse.
-        let card_to_play = choose_card_nonrecursive(
-            &CardToPlayRequest::from_round(&round), strategy, &mut rng);
+        let card_to_play =
+            choose_card_nonrecursive(&CardToPlayRequest::from_round(&round), strategy, &mut rng);
         round.play_card(&card_to_play).expect("");
     }
 }
@@ -372,8 +404,9 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
             if c.suit != trick_suit {
                 voided_suits[(leader + i) % num_players].insert(trick_suit);
             }
-            if c.suit == Suit::Hearts ||
-                    (req.rules.queen_breaks_hearts && c == hearts::QUEEN_OF_SPADES) {
+            if c.suit == Suit::Hearts
+                || (req.rules.queen_breaks_hearts && c == hearts::QUEEN_OF_SPADES)
+            {
                 hearts_broken = true;
             }
         }
@@ -420,8 +453,11 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
     };
 }
 
-fn possible_round(cc_req: &CardToPlayRequest, dist_req: &CardDistributionRequest,
-                  rng: impl Rng) -> Option<hearts::Round> {
+fn possible_round(
+    cc_req: &CardToPlayRequest,
+    dist_req: &CardDistributionRequest,
+    rng: impl Rng,
+) -> Option<hearts::Round> {
     let maybe_dist = possible_card_distribution(&dist_req, rng);
     if maybe_dist.is_err() {
         return None;
@@ -430,7 +466,11 @@ fn possible_round(cc_req: &CardToPlayRequest, dist_req: &CardDistributionRequest
     let cur_player = cc_req.current_player_index();
     let mut result_players: Vec<hearts::Player> = Vec::new();
     for i in 0..cc_req.rules.num_players {
-        let h = (if i == cur_player {&cc_req.hand} else {&dist[i]});
+        let h = (if i == cur_player {
+            &cc_req.hand
+        } else {
+            &dist[i]
+        });
         result_players.push(hearts::Player::new(h));
     }
     return Some(hearts::Round {
@@ -447,10 +487,11 @@ fn possible_round(cc_req: &CardToPlayRequest, dist_req: &CardDistributionRequest
 }
 
 pub fn choose_card_monte_carlo(
-        req: &CardToPlayRequest,
-        mc_params: MonteCarloParams,
-        rollout_strategy: &CardToPlayStrategy,
-        mut rng: impl Rng) -> Card {
+    req: &CardToPlayRequest,
+    mc_params: MonteCarloParams,
+    rollout_strategy: &CardToPlayStrategy,
+    mut rng: impl Rng,
+) -> Card {
     let legal_plays = req.legal_plays();
     assert!(legal_plays.len() > 0);
     if legal_plays.len() == 1 {
@@ -489,8 +530,8 @@ pub fn choose_card_monte_carlo(
                 for p in 0..req.rules.num_players {
                     scores_after_round[p] += round_points[p];
                 }
-                equity_per_play[ci] += match_equity_for_scores(
-                    &scores_after_round, req.rules.point_limit, pnum);
+                equity_per_play[ci] +=
+                    match_equity_for_scores(&scores_after_round, req.rules.point_limit, pnum);
                 // println!("Scores: {:?}", &scores_after_round);
             }
         }
@@ -504,18 +545,29 @@ pub fn choose_card_monte_carlo(
 mod test {
     use super::*;
 
-    fn c(s: &str) -> Vec<Card> {cards_from_str(s).unwrap()}
+    fn c(s: &str) -> Vec<Card> {
+        cards_from_str(s).unwrap()
+    }
 
     #[test]
     fn test_match_equity() {
         assert_eq!(1.0, match_equity_for_scores(&vec![50, 60, 100, 60], 100, 0));
         assert_eq!(0.0, match_equity_for_scores(&vec![50, 60, 100, 60], 100, 1));
-        assert_eq!(1.0, match_equity_for_scores(&vec![104, 103, 102, 101], 100, 3));
-        assert_eq!(0.0, match_equity_for_scores(&vec![104, 103, 102, 101], 100, 2));
+        assert_eq!(
+            1.0,
+            match_equity_for_scores(&vec![104, 103, 102, 101], 100, 3)
+        );
+        assert_eq!(
+            0.0,
+            match_equity_for_scores(&vec![104, 103, 102, 101], 100, 2)
+        );
 
         assert_eq!(0.5, match_equity_for_scores(&vec![50, 60, 100, 50], 100, 3));
         assert_eq!(0.25, match_equity_for_scores(&vec![0, 0, 0, 0], 100, 3));
-        assert_eq!(0.25, match_equity_for_scores(&vec![100, 100, 100, 100], 100, 3));
+        assert_eq!(
+            0.25,
+            match_equity_for_scores(&vec![100, 100, 100, 100], 100, 3)
+        );
 
         let e1 = match_equity_for_scores(&vec![50, 60, 70, 80], 100, 0);
         let e2 = match_equity_for_scores(&vec![51, 59, 70, 80], 100, 0);

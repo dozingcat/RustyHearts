@@ -6,15 +6,15 @@ mod hearts_json;
 use std::ffi::CStr;
 use std::io;
 use std::io::Read;
-use std::slice;
 use std::ptr;
+use std::slice;
 
-use rand::Rng;
 use rand::thread_rng;
+use rand::Rng;
 
 use card::*;
 use hearts_ai::MonteCarloParams;
-use hearts_ai::{CardsToPassRequest, CardToPlayRequest, CardToPlayStrategy};
+use hearts_ai::{CardToPlayRequest, CardToPlayStrategy, CardsToPassRequest};
 
 /* Example: paste to stdin:
 {
@@ -33,14 +33,19 @@ fn main() {
     std::io::stdin().read_to_string(&mut buffer);
     let req = hearts_json::parse_card_to_play_request(&buffer).unwrap();
     let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
-        0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
+        0.1,
+        MonteCarloParams {
+            num_hands: 50,
+            rollouts_per_hand: 20,
+        },
+    );
     let ai_card = hearts_ai::choose_card(&req, &ai_strat, &mut rng);
     println!("{}", ai_card.symbol_string());
 }
 
 fn string_from_ptr(s: *const u8, len: u32) -> String {
     assert!(!s.is_null());
-    let bytes = unsafe {slice::from_raw_parts(s, len as usize)};
+    let bytes = unsafe { slice::from_raw_parts(s, len as usize) };
     return String::from_utf8(bytes.to_vec()).unwrap();
 }
 
@@ -60,14 +65,18 @@ fn card_to_play_req_from_json(s: *const u8, len: u32) -> CardToPlayRequest {
 // The size of `pass_out` must be at least the number of cards in the hand.
 // See ffi_test.py for an example of how to call.
 #[no_mangle]
-pub extern fn cards_to_pass_from_json(s: *const u8, len: u32, pass_out: *mut u8, out_len: u32) {
-    let req = unsafe {cards_to_pass_req_from_json(s, len)};
+pub extern "C" fn cards_to_pass_from_json(s: *const u8, len: u32, pass_out: *mut u8, out_len: u32) {
+    let req = unsafe { cards_to_pass_req_from_json(s, len) };
     let cards_to_pass = hearts_ai::choose_cards_to_pass(&req);
     if req.hand.len() > (out_len as usize) {
-        panic!("`out_len` is {} but hand has {} cards", out_len, req.hand.len());
+        panic!(
+            "`out_len` is {} but hand has {} cards",
+            out_len,
+            req.hand.len()
+        );
     }
     for (i, card) in req.hand.iter().enumerate() {
-        let val: u8 = if cards_to_pass.contains(card) {1} else {0};
+        let val: u8 = if cards_to_pass.contains(card) { 1 } else { 0 };
         unsafe {
             std::ptr::write_unaligned(pass_out.offset(i as isize), val);
         }
@@ -78,10 +87,15 @@ pub extern fn cards_to_pass_from_json(s: *const u8, len: u32, pass_out: *mut u8,
 // Returns the best card to play as an index into the "hand" field of the request.
 // See ffi_test.py for an example of how to call.
 #[no_mangle]
-pub extern fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
-    let req = unsafe {card_to_play_req_from_json(s, len)};
+pub extern "C" fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
+    let req = unsafe { card_to_play_req_from_json(s, len) };
     let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
-        0.1, MonteCarloParams {num_hands: 50, rollouts_per_hand: 20});
+        0.1,
+        MonteCarloParams {
+            num_hands: 50,
+            rollouts_per_hand: 20,
+        },
+    );
     let mut rng = thread_rng();
     let ai_card = hearts_ai::choose_card(&req, &ai_strat, &mut rng);
     return match req.hand.iter().position(|&c| c == ai_card) {
@@ -97,14 +111,18 @@ pub extern fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
 // number of cards in the hand.
 // See ffi_test.py for an example of how to call.
 #[no_mangle]
-pub extern fn legal_plays_from_json(s: *const u8, len: u32, legal_out: *mut u8, out_len: u32) {
-    let req = unsafe {card_to_play_req_from_json(s, len)};
+pub extern "C" fn legal_plays_from_json(s: *const u8, len: u32, legal_out: *mut u8, out_len: u32) {
+    let req = unsafe { card_to_play_req_from_json(s, len) };
     let legal_plays = req.legal_plays();
     if req.hand.len() > (out_len as usize) {
-        panic!("`out_len` is {} but hand has {} cards", out_len, req.hand.len());
+        panic!(
+            "`out_len` is {} but hand has {} cards",
+            out_len,
+            req.hand.len()
+        );
     }
     for (i, card) in req.hand.iter().enumerate() {
-        let val: u8 = if legal_plays.contains(card) {1} else {0};
+        let val: u8 = if legal_plays.contains(card) { 1 } else { 0 };
         unsafe {
             std::ptr::write_unaligned(legal_out.offset(i as isize), val);
         }
@@ -116,11 +134,19 @@ pub extern fn legal_plays_from_json(s: *const u8, len: u32, legal_out: *mut u8, 
 // at least the number of players.
 // See ffi_test.py for an example of how to call.
 #[no_mangle]
-pub extern fn points_taken_from_json(s: *const u8, len: u32, points_out: *mut i32, out_len: u32) {
+pub extern "C" fn points_taken_from_json(
+    s: *const u8,
+    len: u32,
+    points_out: *mut i32,
+    out_len: u32,
+) {
     let r_str = string_from_ptr(s, len);
     let history = hearts_json::parse_trick_history(&r_str).unwrap();
     if history.rules.num_players > (out_len as usize) {
-        panic!("`out_len` is {} but there are {} players", out_len, history.rules.num_players);
+        panic!(
+            "`out_len` is {} but there are {} players",
+            out_len, history.rules.num_players
+        );
     }
     let points = history.points_taken();
     for (i, player_points) in points.iter().enumerate() {

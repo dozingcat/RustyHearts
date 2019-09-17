@@ -1,6 +1,6 @@
-use std::collections::HashSet;
-use rand::Rng;
 use rand::seq::SliceRandom;
+use rand::Rng;
+use std::collections::HashSet;
 
 #[derive(Debug)]
 pub struct CardError {
@@ -9,7 +9,7 @@ pub struct CardError {
 
 impl CardError {
     pub fn new(s: &str) -> CardError {
-        return CardError {msg: s.to_string()};
+        return CardError { msg: s.to_string() };
     }
 }
 
@@ -33,7 +33,7 @@ impl Suit {
             "♥" => Ok(Suit::Hearts),
             "♠" => Ok(Suit::Spades),
             _ => Err(CardError::new("Bad char")),
-        }
+        };
     }
 
     pub fn letter(&self) -> &str {
@@ -55,8 +55,9 @@ impl Suit {
     }
 }
 
-const RANK_CHARS: [&'static str; 13] =
-    ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"];
+const RANK_CHARS: [&'static str; 13] = [
+    "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A",
+];
 
 #[derive(Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Copy, Clone)]
 pub struct Rank {
@@ -66,7 +67,7 @@ pub struct Rank {
 impl Rank {
     pub fn num(r: u32) -> Rank {
         assert!(r >= 2 && r <= 14);
-        return Rank {value: r};
+        return Rank { value: r };
     }
 
     pub fn from(s: &str) -> Result<Rank, CardError> {
@@ -85,18 +86,18 @@ impl Rank {
             "K" => Ok(Rank::KING),
             "A" => Ok(Rank::ACE),
             _ => Err(CardError::new("Bad char")),
-        }
+        };
     }
 
     pub fn rank_char(&self) -> &str {
         return RANK_CHARS[(self.value as usize) - 2];
     }
 
-    pub const TWO: Rank = Rank {value : 2};
-    pub const JACK: Rank = Rank {value: 11};
-    pub const QUEEN: Rank = Rank {value: 12};
-    pub const KING: Rank = Rank {value: 13};
-    pub const ACE: Rank = Rank {value: 14};
+    pub const TWO: Rank = Rank { value: 2 };
+    pub const JACK: Rank = Rank { value: 11 };
+    pub const QUEEN: Rank = Rank { value: 12 };
+    pub const KING: Rank = Rank { value: 13 };
+    pub const ACE: Rank = Rank { value: 14 };
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
@@ -107,11 +108,11 @@ pub struct Card {
 
 impl Card {
     pub fn new(r: Rank, s: Suit) -> Card {
-        return Card {rank: r, suit: s};
+        return Card { rank: r, suit: s };
     }
 
     pub fn from(s: &str) -> Result<Card, CardError> {
-        if s.chars().count() == 2  {
+        if s.chars().count() == 2 {
             let mut chars = s.chars();
             let r = chars.next().unwrap().to_string();
             let s = chars.next().unwrap().to_string();
@@ -170,7 +171,7 @@ impl Deck {
     pub fn new() -> Deck {
         let mut cards: Vec<Card> = Vec::new();
         for_each_card(|c| cards.push(*c));
-        return Deck {cards: cards};
+        return Deck { cards: cards };
     }
 
     pub fn shuffle(&mut self, mut rng: impl Rng) {
@@ -187,11 +188,13 @@ pub fn suit_group(cards: &[Card], suit: Suit) -> String {
 }
 
 pub fn all_suit_groups(cards: &[Card]) -> String {
-    return format!("{} {} {} {}",
+    return format!(
+        "{} {} {} {}",
         suit_group(&cards, Suit::Spades),
         suit_group(&cards, Suit::Hearts),
         suit_group(&cards, Suit::Diamonds),
-        suit_group(&cards, Suit::Clubs))
+        suit_group(&cards, Suit::Clubs)
+    );
 }
 
 // Returns the ranks of cards in the given suit, sorted descending.
@@ -207,7 +210,7 @@ pub fn ranks_for_suit(cards: &[Card], suit: Suit) -> Vec<Rank> {
     return ranks;
 }
 
-pub fn random_from_set<T>(items: &HashSet<T>, mut rng :impl Rng) -> &T {
+pub fn random_from_set<T>(items: &HashSet<T>, mut rng: impl Rng) -> &T {
     let n: usize = rng.gen_range(0, items.len());
     let mut ci = items.iter();
     for _i in 0..n {
@@ -230,8 +233,10 @@ pub struct CardDistributionRequest {
     // fixed card that is not in `cards`.
 }
 
-fn _possible_card_distribution(req: &CardDistributionRequest, mut rng: impl Rng)
-        -> Result<Vec<Vec<Card>>, CardError> {
+fn _possible_card_distribution(
+    req: &CardDistributionRequest,
+    mut rng: impl Rng,
+) -> Result<Vec<Vec<Card>>, CardError> {
     let num_players = req.constraints.len();
     let mut result: Vec<Vec<Card>> = Vec::new();
     let mut legal_cards: Vec<HashSet<Card>> = Vec::new();
@@ -307,8 +312,9 @@ fn _possible_card_distribution(req: &CardDistributionRequest, mut rng: impl Rng)
 }
 
 pub fn possible_card_distribution(
-        req: &CardDistributionRequest, mut rng: impl Rng)
-        -> Result<Vec<Vec<Card>>, CardError> {
+    req: &CardDistributionRequest,
+    mut rng: impl Rng,
+) -> Result<Vec<Vec<Card>>, CardError> {
     for _ in 0..10000 {
         let result = _possible_card_distribution(req, &mut rng);
         if result.is_ok() {
@@ -317,24 +323,39 @@ pub fn possible_card_distribution(
     }
     println!("cards: {}", all_suit_groups(&req.cards));
     println!("constraints: {:?}", &req.constraints);
-    return Err(CardError::new("Cannot satisfy constraints after 10000 attempts"));
+    return Err(CardError::new(
+        "Cannot satisfy constraints after 10000 attempts",
+    ));
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
-    fn c(s: &str) -> Card {Card::from(s).unwrap()}
+    fn c(s: &str) -> Card {
+        Card::from(s).unwrap()
+    }
 
-    fn cv(s: &str) -> Vec<Card> {cards_from_str(s).unwrap()}
+    fn cv(s: &str) -> Vec<Card> {
+        cards_from_str(s).unwrap()
+    }
 
     #[test]
     fn test_parse() {
-        assert_eq!(Card::from("6H").unwrap(), Card::new(Rank::num(6), Suit::Hearts));
-        assert_eq!(Card::from("tc").unwrap(), Card::new(Rank::num(10), Suit::Clubs));
-        assert_eq!(Card::from("Q♠").unwrap(), Card::new(Rank::QUEEN, Suit::Spades));
+        assert_eq!(
+            Card::from("6H").unwrap(),
+            Card::new(Rank::num(6), Suit::Hearts)
+        );
+        assert_eq!(
+            Card::from("tc").unwrap(),
+            Card::new(Rank::num(10), Suit::Clubs)
+        );
+        assert_eq!(
+            Card::from("Q♠").unwrap(),
+            Card::new(Rank::QUEEN, Suit::Spades)
+        );
     }
 
     #[test]
@@ -388,7 +409,8 @@ mod test {
         assert_eq!(ranks_for_suit(&hand, Suit::Spades), [Rank::KING]);
         assert_eq!(
             ranks_for_suit(&hand, Suit::Hearts),
-            [Rank::ACE, Rank::num(10), Rank::num(7), Rank::num(2)]);
+            [Rank::ACE, Rank::num(10), Rank::num(7), Rank::num(2)]
+        );
     }
 
     fn make_constraints(n: usize, num_cards: usize) -> Vec<CardDistributionPlayerConstraint> {
@@ -438,7 +460,9 @@ mod test {
         }
         assert_eq!(ranks_for_suit(&dist[0], Suit::Spades), []);
         assert_eq!(
-            ranks_for_suit(&dist[2], Suit::Clubs), [Rank::num(4), Rank::num(3), Rank::num(2)]);
+            ranks_for_suit(&dist[2], Suit::Clubs),
+            [Rank::num(4), Rank::num(3), Rank::num(2)]
+        );
     }
 
     #[test]
@@ -465,7 +489,8 @@ mod test {
         assert!(!dist[3].contains(&c("AD")));
     }
 
-    #[test] #[ignore]
+    #[test]
+    #[ignore]
     fn test_card_distribution_combination() {
         let mut rng: StdRng = SeedableRng::seed_from_u64(42);
         let cards = cv("AS KS QS JS TS 9S AH KH QH");
