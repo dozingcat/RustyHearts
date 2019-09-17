@@ -2,7 +2,7 @@ use crate::card::*;
 use crate::hearts;
 use crate::hearts_ai;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use serde_json;
 
 #[derive(Debug)]
@@ -12,7 +12,7 @@ pub struct ParseError {
 
 impl ParseError {
     pub fn new(s: &str) -> Self {
-        return ParseError {msg: s.to_string()};
+        return ParseError { msg: s.to_string() };
     }
 }
 
@@ -61,9 +61,11 @@ impl JsonRuleSet {
             points_on_first_trick: self.points_on_first_trick,
             queen_breaks_hearts: self.queen_breaks_hearts,
             jd_minus_10: self.jd_minus_10,
-            moon_shooting:
-                if self.shooting_disabled {hearts::MoonShooting::DISABLED}
-                else {hearts::MoonShooting::OPPONENTS_PLUS_26},
+            moon_shooting: if self.shooting_disabled {
+                hearts::MoonShooting::DISABLED
+            } else {
+                hearts::MoonShooting::OPPONENTS_PLUS_26
+            },
         });
     }
 }
@@ -200,27 +202,30 @@ pub fn parse_trick_history(s: &str) -> Result<TrickHistory, ParseError> {
     return Ok(j.to_history()?);
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn test_parse_pass_request() {
-        let req = parse_cards_to_pass_request(r#"
+        let req = parse_cards_to_pass_request(
+            r#"
             {
                 "scores_before_round": [30, 10, 20, 40],
                 "hand": "2C 8D AS QD",
                 "direction": 1,
                 "num_cards": 3
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         assert_eq!(req.hand.len(), 4);
     }
 
     #[test]
     fn test_parse_play_request() {
-        let req = parse_card_to_play_request(r#"
+        let req = parse_card_to_play_request(
+            r#"
             {
                 "scores_before_round": [30, 10, 20, 40],
                 "hand": "2C 8D AS",
@@ -230,7 +235,9 @@ mod test {
                 "passed_cards": "",
                 "received_cards": ""
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         assert_eq!(req.hand.len(), 3);
     }
 
@@ -239,7 +246,8 @@ mod test {
         let empty = parse_trick_history(r#"{"tricks": []}"#).unwrap();
         assert_eq!(empty.points_taken(), vec![0, 0, 0, 0]);
 
-        let history = parse_trick_history(r#"
+        let history = parse_trick_history(
+            r#"
             {
                 "tricks": [
                     {"leader": 2, "cards": "2C AC QC KC"},
@@ -247,26 +255,32 @@ mod test {
                     {"leader": 1, "cards": "2D 9H KD AH"}
                 ]
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         assert_eq!(history.points_taken(), vec![0, 13, 0, 2]);
     }
 
     #[test]
     fn test_default_rules() {
-        let req = parse_cards_to_pass_request(r#"
+        let req = parse_cards_to_pass_request(
+            r#"
             {
                 "scores_before_round": [30, 10, 20, 40],
                 "hand": "2C 8D AS QD",
                 "direction": 1,
                 "num_cards": 3
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         assert_eq!(req.rules, hearts::RuleSet::default());
     }
 
     #[test]
     fn test_custom_rules() {
-        let req = parse_cards_to_pass_request(r#"
+        let req = parse_cards_to_pass_request(
+            r#"
             {
                 "rules": {
                     "point_limit": 42,
@@ -278,7 +292,9 @@ mod test {
                 "direction": 1,
                 "num_cards": 3
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let expected = hearts::RuleSet {
             point_limit: 42,
             jd_minus_10: true,
@@ -290,7 +306,8 @@ mod test {
 
     #[test]
     fn test_all_different_rules() {
-        let req = parse_cards_to_pass_request(r#"
+        let req = parse_cards_to_pass_request(
+            r#"
             {
                 "rules": {
                     "num_players": 5,
@@ -306,7 +323,9 @@ mod test {
                 "direction": 1,
                 "num_cards": 3
             }
-        "#).unwrap();
+        "#,
+        )
+        .unwrap();
         let expected = hearts::RuleSet {
             num_players: 5,
             removed_cards: vec![

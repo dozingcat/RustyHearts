@@ -2,9 +2,18 @@ use crate::card::*;
 
 use std::collections::HashSet;
 
-pub const QUEEN_OF_SPADES: Card = Card {rank: Rank::QUEEN, suit: Suit::Spades};
-pub const TWO_OF_CLUBS: Card = Card {rank: Rank::TWO, suit: Suit::Clubs};
-pub const JACK_OF_DIAMONDS: Card = Card {rank: Rank::JACK, suit: Suit::Diamonds};
+pub const QUEEN_OF_SPADES: Card = Card {
+    rank: Rank::QUEEN,
+    suit: Suit::Spades,
+};
+pub const TWO_OF_CLUBS: Card = Card {
+    rank: Rank::TWO,
+    suit: Suit::Clubs,
+};
+pub const JACK_OF_DIAMONDS: Card = Card {
+    rank: Rank::JACK,
+    suit: Suit::Diamonds,
+};
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -15,7 +24,11 @@ pub struct Player {
 
 impl Player {
     pub fn new(hand: &[Card]) -> Player {
-        return Player {hand: hand.to_vec(), passed_cards: Vec::new(), received_cards: Vec::new()};
+        return Player {
+            hand: hand.to_vec(),
+            passed_cards: Vec::new(),
+            received_cards: Vec::new(),
+        };
     }
 }
 
@@ -38,8 +51,12 @@ pub struct RuleSet {
 }
 
 impl RuleSet {
-    pub fn default_num_players() -> usize {4}
-    pub fn default_point_limit() -> u32 {100}
+    pub fn default_num_players() -> usize {
+        4
+    }
+    pub fn default_point_limit() -> u32 {
+        100
+    }
 }
 
 impl Default for RuleSet {
@@ -51,7 +68,7 @@ impl Default for RuleSet {
             points_on_first_trick: false,
             queen_breaks_hearts: false,
             jd_minus_10: false,
-            moon_shooting: MoonShooting::OPPONENTS_PLUS_26
+            moon_shooting: MoonShooting::OPPONENTS_PLUS_26,
         };
     }
 }
@@ -59,11 +76,9 @@ impl Default for RuleSet {
 pub fn points_for_card(c: &Card, rules: &RuleSet) -> i32 {
     if c.suit == Suit::Hearts {
         return 1;
-    }
-    else if *c == QUEEN_OF_SPADES {
+    } else if *c == QUEEN_OF_SPADES {
         return 13;
-    }
-    else if rules.jd_minus_10 && *c == JACK_OF_DIAMONDS {
+    } else if rules.jd_minus_10 && *c == JACK_OF_DIAMONDS {
         return -10;
     }
     return 0;
@@ -88,7 +103,7 @@ pub fn points_for_tricks(tricks: &[Trick], rules: &RuleSet) -> Vec<i32> {
     if rules.moon_shooting != MoonShooting::DISABLED {
         if let Some(shooter) = moon_shooter(tricks, &points, rules) {
             for p in 0..rules.num_players {
-                points[p] += if (p == shooter) {-26} else {26};
+                points[p] += if (p == shooter) { -26 } else { 26 };
             }
         }
     }
@@ -119,15 +134,18 @@ fn moon_shooter(tricks: &[Trick], points: &[i32], rules: &RuleSet) -> Option<usi
             }
         }
         return find_shooter(&points_without_jd);
-    }
-    else {
+    } else {
         return find_shooter(points);
     }
 }
 
 pub fn highest_in_trick(cards: &[Card]) -> &Card {
     let suit = cards[0].suit;
-    return cards.iter().filter(|c| c.suit == suit).max_by(|a, b| a.rank.cmp(&b.rank)).unwrap();
+    return cards
+        .iter()
+        .filter(|c| c.suit == suit)
+        .max_by(|a, b| a.rank.cmp(&b.rank))
+        .unwrap();
 }
 
 #[derive(Debug, Clone)]
@@ -145,7 +163,10 @@ pub struct TrickInProgress {
 
 impl TrickInProgress {
     pub fn new(leader: usize) -> TrickInProgress {
-        return TrickInProgress {leader: leader, cards: Vec::new()};
+        return TrickInProgress {
+            leader: leader,
+            cards: Vec::new(),
+        };
     }
 }
 
@@ -190,7 +211,11 @@ impl Round {
             players.push(Player::new(&deck.cards[start..end]));
         }
         let current_player_index = find_card(&players, &TWO_OF_CLUBS);
-        let status = if pass_direction == 0 {RoundStatus::Playing} else {RoundStatus::Passing};
+        let status = if pass_direction == 0 {
+            RoundStatus::Playing
+        } else {
+            RoundStatus::Passing
+        };
         return Round {
             rules: rules.clone(),
             players: players,
@@ -216,7 +241,8 @@ impl Round {
             &self.current_player().hand,
             &self.current_trick,
             &self.prev_tricks,
-            &self.rules);
+            &self.rules,
+        );
     }
 
     pub fn are_hearts_broken(&self) -> bool {
@@ -285,8 +311,7 @@ impl Round {
             self.current_trick.cards.push(*card);
             if self.current_trick.cards.len() == self.players.len() {
                 let winner_index = trick_winner_index(&self.current_trick.cards);
-                let winner =
-                    (self.current_trick.leader + winner_index) % self.players.len();
+                let winner = (self.current_trick.leader + winner_index) % self.players.len();
                 self.prev_tricks.push(Trick {
                     leader: self.current_trick.leader,
                     cards: self.current_trick.cards.clone(),
@@ -295,8 +320,7 @@ impl Round {
                 self.current_trick = TrickInProgress::new(winner);
             }
             return Ok(());
-        }
-        else {
+        } else {
             return Err(());
         }
     }
@@ -317,7 +341,10 @@ impl Round {
 }
 
 fn are_hearts_broken(
-    current_trick: &TrickInProgress, prev_tricks: &[Trick], rules: &RuleSet) -> bool {
+    current_trick: &TrickInProgress,
+    prev_tricks: &[Trick],
+    rules: &RuleSet,
+) -> bool {
     let qb = rules.queen_breaks_hearts;
     for t in prev_tricks.iter() {
         for &c in t.cards.iter() {
@@ -334,10 +361,12 @@ fn are_hearts_broken(
     return false;
 }
 
-pub fn legal_plays(hand: &[Card],
-                   current_trick: &TrickInProgress,
-                   prev_tricks: &[Trick],
-                   rules: &RuleSet) -> Vec<Card> {
+pub fn legal_plays(
+    hand: &[Card],
+    current_trick: &TrickInProgress,
+    prev_tricks: &[Trick],
+    rules: &RuleSet,
+) -> Vec<Card> {
     if prev_tricks.is_empty() {
         // First trick.
         if current_trick.cards.is_empty() {
@@ -346,19 +375,20 @@ pub fn legal_plays(hand: &[Card],
                 return vec![TWO_OF_CLUBS];
             }
             return Vec::new();
-        }
-        else {
+        } else {
             // Follow suit if possible.
             let lead = current_trick.cards[0].suit;
             let suit_matches: Vec<Card> = hand.iter().filter(|c| c.suit == lead).cloned().collect();
             if !suit_matches.is_empty() {
                 return suit_matches;
-            }
-            else {
+            } else {
                 // No points unless rule is set.
                 if !rules.points_on_first_trick {
-                    let non_points: Vec<Card> =
-                        hand.iter().filter(|c| points_for_card(c, rules) <= 0).cloned().collect();
+                    let non_points: Vec<Card> = hand
+                        .iter()
+                        .filter(|c| points_for_card(c, rules) <= 0)
+                        .cloned()
+                        .collect();
                     if !non_points.is_empty() {
                         return non_points;
                     }
@@ -371,19 +401,25 @@ pub fn legal_plays(hand: &[Card],
     if current_trick.cards.is_empty() {
         // Leading a new trick; remove hearts unless hearts are broken or there's no choice.
         if !are_hearts_broken(current_trick, prev_tricks, rules) {
-            let non_hearts: Vec<Card> =
-                hand.iter().filter(|c| c.suit != Suit::Hearts).cloned().collect();
+            let non_hearts: Vec<Card> = hand
+                .iter()
+                .filter(|c| c.suit != Suit::Hearts)
+                .cloned()
+                .collect();
             if !non_hearts.is_empty() {
                 return non_hearts;
             }
         }
         return hand.to_vec();
-    }
-    else {
+    } else {
         // Follow suit if possible; otherwise play anything.
         let lead = current_trick.cards[0].suit;
         let suit_matches: Vec<Card> = hand.iter().filter(|c| c.suit == lead).cloned().collect();
-        return if suit_matches.is_empty() {hand.to_vec()} else {suit_matches};
+        return if suit_matches.is_empty() {
+            hand.to_vec()
+        } else {
+            suit_matches
+        };
     }
 }
 
@@ -399,15 +435,20 @@ pub fn trick_winner_index(cards: &[Card]) -> usize {
     return best_index;
 }
 
-
 #[cfg(test)]
 mod test {
     use super::*;
 
-    fn c(s: &str) -> Vec<Card> {cards_from_str(s).unwrap()}
+    fn c(s: &str) -> Vec<Card> {
+        cards_from_str(s).unwrap()
+    }
 
     fn make_trick(leader: usize, cards: &str, winner: usize) -> Trick {
-        return Trick {leader: leader, cards: c(cards), winner: winner};
+        return Trick {
+            leader: leader,
+            cards: c(cards),
+            winner: winner,
+        };
     }
 
     #[test]
@@ -417,10 +458,16 @@ mod test {
         let cur_trick = TrickInProgress::new(0);
 
         let prev_tricks_no_hearts = vec![make_trick(0, "8S 7S 6S 5S", 0)];
-        assert_eq!(legal_plays(&hand, &cur_trick, &prev_tricks_no_hearts, &rules), c("AS 4C"));
+        assert_eq!(
+            legal_plays(&hand, &cur_trick, &prev_tricks_no_hearts, &rules),
+            c("AS 4C")
+        );
 
         let prev_tricks_hearts = vec![make_trick(0, "8S 7S KH 5S", 0)];
-        assert_eq!(legal_plays(&hand, &cur_trick, &prev_tricks_hearts, &rules), c("AS QH 4C"));
+        assert_eq!(
+            legal_plays(&hand, &cur_trick, &prev_tricks_hearts, &rules),
+            c("AS QH 4C")
+        );
     }
 
     #[test]
@@ -434,11 +481,23 @@ mod test {
             winner: 3,
         }];
 
-        let spade_lead = TrickInProgress {leader: 0, cards: c("3S KH")};
-        assert_eq!(legal_plays(&hand, &spade_lead, &prev_tricks, &rules), c("AS 2S"));
+        let spade_lead = TrickInProgress {
+            leader: 0,
+            cards: c("3S KH"),
+        };
+        assert_eq!(
+            legal_plays(&hand, &spade_lead, &prev_tricks, &rules),
+            c("AS 2S")
+        );
 
-        let diamond_lead = TrickInProgress {leader: 0, cards: c("3D KH")};
-        assert_eq!(legal_plays(&hand, &diamond_lead, &prev_tricks, &rules), c("AS 2S QH 4C"));
+        let diamond_lead = TrickInProgress {
+            leader: 0,
+            cards: c("3D KH"),
+        };
+        assert_eq!(
+            legal_plays(&hand, &diamond_lead, &prev_tricks, &rules),
+            c("AS 2S QH 4C")
+        );
     }
 
     #[test]
@@ -454,7 +513,10 @@ mod test {
     fn test_first_trick_follow() {
         let rules = RuleSet::default();
         let hand = c("AS 2S AC QH 3C");
-        let cur_trick = TrickInProgress {leader: 0, cards: c("2C JC")};
+        let cur_trick = TrickInProgress {
+            leader: 0,
+            cards: c("2C JC"),
+        };
 
         assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("AC 3C"));
     }
@@ -463,21 +525,36 @@ mod test {
     fn test_first_trick_no_points() {
         let mut rules = RuleSet::default();
         let hand = c("AS QS 7S 7H 7D");
-        let cur_trick = TrickInProgress {leader: 0, cards: c("2C JC")};
+        let cur_trick = TrickInProgress {
+            leader: 0,
+            cards: c("2C JC"),
+        };
 
-        assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("AS 7S 7D"));
+        assert_eq!(
+            legal_plays(&hand, &cur_trick, &vec![], &rules),
+            c("AS 7S 7D")
+        );
 
         rules.points_on_first_trick = true;
-        assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("AS QS 7S 7H 7D"));
+        assert_eq!(
+            legal_plays(&hand, &cur_trick, &vec![], &rules),
+            c("AS QS 7S 7H 7D")
+        );
     }
 
     #[test]
     fn test_first_trick_only_points() {
         let mut rules = RuleSet::default();
         let hand = c("AH TH QS 7H");
-        let cur_trick = TrickInProgress {leader: 0, cards: c("2C JC")};
+        let cur_trick = TrickInProgress {
+            leader: 0,
+            cards: c("2C JC"),
+        };
 
-        assert_eq!(legal_plays(&hand, &cur_trick, &vec![], &rules), c("AH TH QS 7H"));
+        assert_eq!(
+            legal_plays(&hand, &cur_trick, &vec![], &rules),
+            c("AH TH QS 7H")
+        );
     }
 
     #[test]
