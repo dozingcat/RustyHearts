@@ -9,7 +9,7 @@ import capi
 class RuleSet:
     num_players: int = 4
     removed_cards: Set[Card] = frozenset()
-    point_limit: int = 50
+    point_limit: int = 100
     points_on_first_trick: bool = False
     queen_breaks_hearts: bool = False
     jd_minus_10: bool = False

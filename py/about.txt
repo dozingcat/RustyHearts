@@ -1,9 +1,7 @@
 [b]Hearts 1.0[/b]
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Suspendisse luctus nunc non lacus aliquet iaculis. Aenean non leo nec mi scelerisque rutrum. Donec sed malesuada odio, vitae ornare arcu. Morbi in molestie dolor, eu scelerisque dolor. Donec rutrum elementum tortor. Nulla facilisi. Praesent et turpis commodo, egestas sem ut, lobortis nibh. Vivamus efficitur tellus fringilla eros sagittis, nec venenatis sapien tincidunt. Fusce non viverra dolor, eget fermentum mi. Curabitur dui ante, aliquet a lectus at, laoreet vestibulum enim.
+© 2019 Brian Nenninger
 
-Sed augue nunc, congue ut auctor sed, mattis sit amet magna. Quisque condimentum, libero ut auctor dapibus, urna ante ultrices orci, in dapibus orci leo in turpis. Praesent at tincidunt dolor. Nam et dolor sit amet velit sagittis imperdiet quis eu est. Sed tristique congue risus at ultricies. Mauris pulvinar venenatis quam, id sodales dui finibus a. Vestibulum in venenatis ante, eget efficitur diam.
+Comments and bug reports: [ref=email]bnenning@gmail.com[/ref]
 
-In et nunc vulputate, aliquet massa vel, aliquet nisl. Sed laoreet lacinia dolor, ut posuere turpis pharetra in. Integer elementum dui at arcu ultrices cursus. Maecenas at semper erat. Suspendisse potenti. Morbi nec erat nibh. Cras mattis sed nunc et semper.
-
-Suspendisse fermentum arcu consectetur consequat volutpat. Nam ut velit eu nisi sollicitudin placerat ac quis leo. Curabitur pulvinar ipsum nisl. In lobortis nec ipsum non scelerisque. Morbi quis lacus bibendum mauris mattis luctus. Aenean et dolor vitae risus efficitur dignissim. Integer nec est vel est egestas vehicula. Mauris libero augue, hendrerit sit amet porttitor at, dapibus vel risus. Praesent iaculis nibh in est fermentum, ac sollicitudin ex ullamcorper. Phasellus dictum placerat quam, et ornare enim sagittis sed. Fusce accumsan leo mauris, sit amet facilisis orci tincidunt eget. Nam ut sem felis. Curabitur rutrum quis nisi sit amet tristique.
+Source code: [ref=source]https://github.com/dozingcat/RustyHearts[/ref]
