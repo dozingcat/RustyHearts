@@ -2,11 +2,12 @@
 
 from enum import Enum, unique
 import random
+import threading
 from typing import Iterable, List
 
 from kivy.animation import Animation
 from kivy.app import App
-from kivy.clock import Clock
+from kivy.clock import Clock, mainthread
 from kivy.core.window import Window
 from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.button import Button
@@ -236,11 +237,25 @@ class HeartsApp(App):
             # This will highlight the player's legal cards.
             self.render()
         else:
+            # Compute the best card to play in a separate thread so the UI
+            # stays responsive and animation timers work as expected.
+            self._make_ai_play_in_thread(rnd)
+
+    def _make_ai_play_in_thread(self, rnd: Round):
+        @mainthread
+        def play_card_in_main_thread(card):
+            print(f'(not) Main thread: {card.symbol_string()}')
+            self.play_card(card)
+
+        def run_ai_thread():
+            pnum = rnd.current_player_index()
             lc = capi.legal_plays(rnd)
             best = capi.best_play(rnd)
             print(f'Legal plays: {" ".join(c.symbol_string() for c in lc)}')
             print(f'Player {pnum} plays {best.symbol_string()}')
-            self.play_card(best)
+            play_card_in_main_thread(best)
+
+        threading.Thread(target=run_ai_thread).start()
 
     def set_or_unset_card_to_pass(self, card):
         if card in self.cards_to_pass:
@@ -753,6 +768,9 @@ class HeartsApp(App):
             with open('about.txt') as f:
                 self.help_text = f.read()
 
+        def handle_ref_click(instance, value):
+            print(f'Clicked on ref: {value}')
+
         scrollview_height_frac = 0.85
         sv = ScrollView(
             size_hint=(1, None),
@@ -771,6 +789,7 @@ class HeartsApp(App):
             label.size = label.texture_size
         label.bind(pos=update_label)
         sv.add_widget(label)
+        label.bind(on_ref_press=handle_ref_click)
 
         button_height_frac = (1 - scrollview_height_frac) * 2 / 3
         button_y = (1 - scrollview_height_frac) / 6

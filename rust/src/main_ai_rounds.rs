@@ -13,10 +13,6 @@ use card::*;
 use hearts_ai::MonteCarloParams;
 use hearts_ai::CardToPlayStrategy;
 
-// TODO:
-// pass cards
-// match with multiple rounds to 100 points
-
 fn pass_direction_string(dir: u32) -> String {
     return (match dir {
         1 => "left",
