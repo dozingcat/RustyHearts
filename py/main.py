@@ -244,7 +244,15 @@ class HeartsApp(App):
     def _make_ai_play_in_thread(self, rnd: Round):
         @mainthread
         def play_card_in_main_thread(card):
-            print(f'(not) Main thread: {card.symbol_string()}')
+            # FIXME: Find out how these conditions can happen and prevent them.
+            print(f'Main thread: playing {card.symbol_string()}')
+            if self.match is None or self.match.current_round != rnd:
+                print(f'Round changed!')
+                return
+            pnum = rnd.current_player_index()
+            if card not in rnd.players[pnum].hand:
+                print(f'Player {pnum} does not have {card.symbol_string()}!')
+                return
             self.play_card(card)
 
         def run_ai_thread():
