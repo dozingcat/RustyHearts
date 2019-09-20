@@ -127,6 +127,7 @@ class HeartsApp(App):
         self.card_draw_locations = {}
         # And where the card the player clicked on should animate from.
         self.played_card_position = None
+        self.animating_trick_winner = None
         self.match = self.storage.load_current_match()
         if self.match:
             Clock.schedule_once(lambda dt: self.render(), 0)
@@ -196,16 +197,28 @@ class HeartsApp(App):
         print(f'Legal plays (hopefully 2c): {" ".join(c.symbol_string() for c in lc)}')
         self.handle_next_play()
 
+    def start_trick_winner_animation(self, winner: int, expected_cards_played: int):
+        def do_next():
+            if winner != 0 or self.match.current_round.is_finished():
+                self.handle_next_play_maybe(expected_cards_played)
+
+        rnd = self.match.current_round
+        if rnd is not None and rnd.num_cards_played() == expected_cards_played:
+            self.animating_trick_winner = winner
+            Clock.schedule_once(lambda dt: do_next(), 0.25)
+            self.render()
+            self.animating_trick_winner = None
+
     def play_card(self, card: Card):
         self.match.current_round.play_card(card)
+        nc = self.match.current_round.num_cards_played()
         if self.match.current_round.did_trick_just_finish():
             w = self.match.current_round.last_trick_winner()
             print(f'Player {w} takes the trick')
             print(f'Points: {capi.points_taken(self.match.current_round)}')
-            if w != 0 or self.match.current_round.is_finished():
-                Clock.schedule_once(lambda dt: self.handle_next_play(), 1.5)
+            Clock.schedule_once(lambda dt: self.start_trick_winner_animation(w, nc), 1.0)
         else:
-            Clock.schedule_once(lambda dt: self.handle_next_play(), 0.5)
+            Clock.schedule_once(lambda dt: self.handle_next_play_maybe(nc), 0.5)
         self.render()
 
     def do_round_finished(self):
@@ -225,6 +238,13 @@ class HeartsApp(App):
             self.storage.remove_current_match()
             print(f'Match stats: {self.storage.load_match_stats()}')
         self.render()
+
+    # Use this method when scheduling a future play that we want to cancel if
+    # another play (typically from the human player) happens beforehand.
+    def handle_next_play_maybe(self, expected_cards_played: int):
+        rnd = self.match.current_round
+        if rnd is not None and rnd.num_cards_played() == expected_cards_played:
+            self.handle_next_play()
 
     def handle_next_play(self):
         rnd = self.match.current_round
@@ -403,7 +423,10 @@ class HeartsApp(App):
                 end_pos = (
                     end_positions[pnum][0] * self.layout.width,
                     end_positions[pnum][1] * self.layout.height)
-                show_anim = (self.last_animated_card != card and i == len(ct.cards) - 1)
+                show_anim = (
+                    self.animating_trick_winner is None and
+                    self.last_animated_card != card and
+                    i == len(ct.cards) - 1)
                 if show_anim:
                     start_pos = (
                         start_positions[pnum][0]() * self.layout.width,
@@ -416,6 +439,16 @@ class HeartsApp(App):
                 else:
                     img = ImageButton(source=img_path, pos=end_pos, size_hint=(0.2, 0.2))
                     self.layout.add_widget(img)
+                    if self.animating_trick_winner is not None:
+                        # HERE: Animate to correct position
+                        tx, ty = [
+                            (0.4, -0.2), (-0.2, 0.55), (0.4, 1.0), (1.0, 0.55)
+                        ][self.animating_trick_winner]
+                        anim = Animation(
+                            x = tx * self.layout.width,
+                            y = ty * self.layout.height,
+                            t='out_cubic', duration=0.25)
+                        anim.start(img)
 
 
     def render_message(self):

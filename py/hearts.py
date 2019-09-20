@@ -129,6 +129,10 @@ class Round:
             cards[t.winner].extend(t.cards)
         return cards
 
+    def num_cards_played(self):
+        ct = self.current_trick
+        return self.rules.num_players * len(self.prev_tricks) + (len(ct.cards) if ct else 0)
+
 
 class Match:
     def __init__(self, rules: RuleSet):
