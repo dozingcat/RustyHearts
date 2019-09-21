@@ -3,6 +3,7 @@
 from enum import Enum, unique
 import random
 import threading
+import time
 from typing import Iterable, List
 
 from kivy.animation import Animation
@@ -110,6 +111,8 @@ class HeartsApp(App):
 
     def build(self):
         self.storage = Storage(self.user_data_dir)
+        self.time_fn = time.time
+        self.sleep_fn = time.sleep
         self.layout = FloatLayout()
         ui.set_rect_background(self.layout, [0, 0.3, 0, 1])
         Window.on_resize = lambda *args: Clock.schedule_once(lambda dt: self.do_resize())
@@ -132,7 +135,7 @@ class HeartsApp(App):
         if self.match:
             Clock.schedule_once(lambda dt: self.render(), 0)
             # In case it's an AI opponent's turn.
-            Clock.schedule_once(lambda dt: self.handle_next_play(), 1)
+            self.handle_next_play(1.0)
         else:
             Clock.schedule_once(lambda dt: self.start_match(), 0)
         return self.layout
@@ -195,17 +198,15 @@ class HeartsApp(App):
         self.match.current_round.start_play()
         lc = capi.legal_plays(self.match.current_round)
         print(f'Legal plays (hopefully 2c): {" ".join(c.symbol_string() for c in lc)}')
-        self.handle_next_play()
+        self.handle_next_play(0)
 
     def start_trick_winner_animation(self, winner: int, expected_cards_played: int):
-        def do_next():
-            if winner != 0 or self.match.current_round.is_finished():
-                self.handle_next_play_maybe(expected_cards_played)
-
         rnd = self.match.current_round
+        # Only animate if we're at the expected point in the round. It's
+        # possible that the user could have made a play before the previous
+        # animation finished, in which case we should skip this.
         if rnd is not None and rnd.num_cards_played() == expected_cards_played:
             self.animating_trick_winner = winner
-            Clock.schedule_once(lambda dt: do_next(), 0.25)
             self.render()
             self.animating_trick_winner = None
 
@@ -217,8 +218,9 @@ class HeartsApp(App):
             print(f'Player {w} takes the trick')
             print(f'Points: {capi.points_taken(self.match.current_round)}')
             Clock.schedule_once(lambda dt: self.start_trick_winner_animation(w, nc), 1.0)
+            self.handle_next_play(1.3)
         else:
-            Clock.schedule_once(lambda dt: self.handle_next_play_maybe(nc), 0.5)
+            self.handle_next_play(0.5)
         self.render()
 
     def do_round_finished(self):
@@ -239,29 +241,29 @@ class HeartsApp(App):
             print(f'Match stats: {self.storage.load_match_stats()}')
         self.render()
 
-    # Use this method when scheduling a future play that we want to cancel if
-    # another play (typically from the human player) happens beforehand.
-    def handle_next_play_maybe(self, expected_cards_played: int):
-        rnd = self.match.current_round
-        if rnd is not None and rnd.num_cards_played() == expected_cards_played:
-            self.handle_next_play()
-
-    def handle_next_play(self):
+    # `min_delay` is the minimum number of seconds to wait before making the
+    # next AI play. This is used to allow thinking while the animation for the
+    # previous play is in progress, while guaranteeing that the animation can
+    # finish before the next play executes.
+    def handle_next_play(self, min_delay: float):
         rnd = self.match.current_round
         if rnd and rnd.is_finished():
-            self.do_round_finished()
+            Clock.schedule_once(lambda dt: self.do_round_finished(), min_delay)
         if not rnd or not rnd.is_in_progress():
             return
         pnum = rnd.current_player_index()
-        if pnum == 0:
-            # This will highlight the player's legal cards.
+        if pnum == 0 and rnd.num_cards_played() == 0:
+            # Needed to highlight legal plays for the first trick.
+            # Only do this on the first play; otherwise render() will
+            # incorrectly redraw cards in the last trick that were already
+            # animated to the trick winner.
             self.render()
-        else:
+        if pnum != 0:
             # Compute the best card to play in a separate thread so the UI
             # stays responsive and animation timers work as expected.
-            self._make_ai_play_in_thread(rnd)
+            self._make_ai_play_in_thread(rnd, min_delay)
 
-    def _make_ai_play_in_thread(self, rnd: Round):
+    def _make_ai_play_in_thread(self, rnd: Round, min_delay: float):
         @mainthread
         def play_card_in_main_thread(card):
             # FIXME: Find out how these conditions can happen and prevent them.
@@ -276,14 +278,21 @@ class HeartsApp(App):
             self.play_card(card)
 
         def run_ai_thread():
+            t = self.time_fn()
             pnum = rnd.current_player_index()
             lc = capi.legal_plays(rnd)
             best = capi.best_play(rnd)
             print(f'Legal plays: {" ".join(c.symbol_string() for c in lc)}')
             print(f'Player {pnum} plays {best.symbol_string()}')
+            elapsed = self.time_fn() - t
+            print(f'AI took {elapsed} seconds')
+            if elapsed < min_delay:
+                self.sleep_fn(min_delay - elapsed)
             play_card_in_main_thread(best)
 
-        threading.Thread(target=run_ai_thread).start()
+        t = threading.Thread(target=run_ai_thread)
+        t.daemon = True
+        t.start()
 
     def set_or_unset_card_to_pass(self, card):
         if card in self.cards_to_pass:
