@@ -5,6 +5,7 @@ import random
 import threading
 import time
 from typing import Iterable, List
+import webbrowser
 
 from kivy.animation import Animation
 from kivy.app import App
@@ -30,10 +31,10 @@ import ui
 CARD_WIDTH_OVER_HEIGHT = 500.0 / 726
 
 def card_image_path(c: Card):
-    return f'images/cards/{c.ascii_string()}.png'
+    return f'assets/cards/{c.ascii_string()}.png'
 
-BLACK_CARD_IMAGE_PATH = 'images/cards/black.png'
-MENU_ICON_PATH = 'images/menu.png'
+BLACK_CARD_IMAGE_PATH = 'assets/cards/black.png'
+MENU_ICON_PATH = 'assets/menu.png'
 
 
 # https://kivy.org/doc/stable/api-kivy.uix.behaviors.html
@@ -582,7 +583,7 @@ class HeartsApp(App):
     def render_menu(self):
         menu_container = BoxLayout(orientation='vertical', pos_hint={'x': 0.1, 'y': 0.1}, size_hint=(0.8, 0.8))
         ui.set_round_rect_background(menu_container, [0, 0, 0, 0.9], 20)
-        font_size = min(self.layout.height / 12, self.layout.width / 10)
+        font_size = min(self.layout.height / 15, self.layout.width / 12)
 
         def start_match():
             self.ui_mode = UIMode.GAME
@@ -815,11 +816,19 @@ class HeartsApp(App):
         self.layout.add_widget(about_container)
 
         if self.help_text is None:
-            with open('about.txt') as f:
+            with open('assets/about.txt') as f:
                 self.help_text = f.read()
 
-        def handle_ref_click(instance, value):
-            print(f'Clicked on ref: {value}')
+        def handle_ref_click(instance, ref):
+            print(f'Clicked on ref: {ref}')
+            if ref == 'source':
+                webbrowser.open('https://github.com/dozingcat/RustyHearts')
+            elif ref == 'wikipedia':
+                webbrowser.open('https://en.wikipedia.org/wiki/Hearts_(card_game)')
+            elif ref == 'gpl3':
+                webbrowser.open('https://www.gnu.org/licenses/gpl-3.0.en.html')
+            elif ref == 'thirdparty':
+                webbrowser.open('https://www.dozingcatsoftware.com/Hearts/thirdparty.html')
 
         scrollview_height_frac = 0.85
         sv = ScrollView(
@@ -827,7 +836,7 @@ class HeartsApp(App):
             size=(about_width, scrollview_height_frac * about_height),
             pos_hint={'x': 0.0, 'y': 1 - scrollview_height_frac})
         about_container.add_widget(sv)
-        font_size = max(about_width, about_height) / 30
+        font_size = max(about_width, about_height) / 40
         label = Label(
             text=self.help_text,
             markup=True,
@@ -843,7 +852,7 @@ class HeartsApp(App):
 
         button_height_frac = (1 - scrollview_height_frac) * 2 / 3
         button_y = (1 - scrollview_height_frac) / 6
-        button_font_size = font_size
+        button_font_size = font_size * 1.5
         button = Button(
             text=localize('Continue'),
             font_size=button_font_size,

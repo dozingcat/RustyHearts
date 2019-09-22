@@ -1,7 +1,0 @@
-[b]Hearts 1.0[/b]
-
-© 2019 Brian Nenninger
-
-Comments and bug reports: [ref=email]bnenning@gmail.com[/ref]
-
-Source code: [ref=source]https://github.com/dozingcat/RustyHearts[/ref]
