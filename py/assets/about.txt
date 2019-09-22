@@ -1,0 +1,29 @@
+[b]Hearts[/b]
+
+Version 1.0.0, Sep 21 2019
+Copyright © 2019 Brian Nenninger
+Comments or suggestions: [ref=email]bnenning@gmail.com[/ref]
+
+[u][ref=source]Source code[/ref][/u]
+
+[b]Rules of Hearts[/b]
+
+The object of Hearts is to have the lowest score at the end of the match. Points are scored by taking hearts and the queen of spades.
+
+A match of hearts consists of a series of rounds. In each round, players are dealt a hand of cards and play them one at a time in "tricks". In each trick, one player will start by playing a card, and then each other player will play a card in clockwise order. Each player after the first must match the suit of the first card if possible; if they have no cards of that suit they may play any card. The player who played the highest ranking card of the first suit takes all the cards in the trick.
+
+After the cards are dealt for each round, there is usually a "passing" step. In this step each player selects three cards to pass to an opponent. The pass direction cycles between left, right, across, and then a round without passing.
+
+Whoever has the two of clubs must lead it for the first trick. After that, whoever takes each trick leads the next one. You cannot lead hearts unless a heart has been played on a previous trick (unless all your cards are hearts).
+
+A round is over when all cards have been played. Each player gets 1 point for each heart they took, and 13 points for the queen of spades. The match is over when one or more players have taken at least 100 points, and the player with the [b]lowest[/b] score wins. This means that you generally want to avoid taking points, but there is a special rule: if a player takes all 13 hearts and the queen of spades, that player score zero points and all their opponents score 26. This is called "shooting the moon".
+
+[u][ref=wikipedia]Wikipedia[/ref][/u] has more information about rules and strategy.
+
+[b]Privacy/Legal[/b]
+
+Hearts does not collect any personal information.
+
+Hearts is free and open source software. It is released under [u][ref=link_gpl3]version 3 of the GNU GPL[/ref][/u]. It includes code and assets from other parties, used in accordance with their licenses. [u][ref=link_thirdparty]See details[/ref][/u].
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
