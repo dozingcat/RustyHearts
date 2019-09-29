@@ -8,6 +8,10 @@ from cards import Card, Rank, Suit
 from hearts import Match, PassInfo, Player, Round, RuleSet, Trick
 from stats import MatchStats, RoundStats, StatsWithAndWithoutJD
 
+def debug(*args, **kwargs):
+    # debug(*args, **kw)
+    pass
+
 def cards_to_string(cards: Iterable[Card]) -> str:
     return " ".join(c.ascii_string() for c in cards)
 
@@ -123,7 +127,7 @@ class Storage:
         with open(match_temp_filename, "w") as f:
             f.write(json.dumps(mdict))
         os.rename(match_temp_filename, match_filename)
-        print(f"Wrote match json to {match_filename}")
+        debug(f"Wrote match json to {match_filename}")
 
     def load_current_match(self) -> Match:
         try:
@@ -181,7 +185,7 @@ class Storage:
                         stats.num_ties += (1 if result == "tie" else 0)
                         stats.total_points += scores[0]
                     except Exception as ex:
-                        print(ex)
+                        print(f"Error reading match stats: {ex}")
         return StatsWithAndWithoutJD(with_jd, without_jd)
 
     def round_history_filename(self):
@@ -238,7 +242,7 @@ class Storage:
                         stats.num_hearts += (hearts if shooter != 0 else 0)
                         stats.num_jack_diamonds += (1 if took_jd else 0)
                     except Exception as ex:
-                        print(ex)
+                        print(f"Error reading round stats: {ex}")
         return StatsWithAndWithoutJD(with_jd, without_jd)
 
     def clear_stats(self):

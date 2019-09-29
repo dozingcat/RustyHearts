@@ -1,6 +1,6 @@
 [b]Hearts[/b]
 
-Version 1.0.0, Sep 21 2019
+Version 1.0.0, Sep 28 2019
 Copyright © 2019 Brian Nenninger
 Comments or suggestions: [ref=email]bnenning@gmail.com[/ref]
 

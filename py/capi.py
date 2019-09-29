@@ -4,6 +4,7 @@ import json
 from hearts import Round, RuleSet
 
 def load_shared_lib():
+    # TODO: Windows support, presumably libhearts.dll.
     paths = [
         '../rust/target/release/libhearts.dylib',
         '../rust/target/release/libhearts.so',

@@ -7,6 +7,10 @@ from kivy.graphics import Color, Ellipse, Rectangle
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 
+def debug(*args, **kwargs):
+    # print(*args, **kw)
+    pass
+
 
 def set_rect_background(widget, color: Iterable[float]):
     with widget.canvas.before:
@@ -109,7 +113,7 @@ def _required_size_for_cells(cells: List[List[AutosizeTableCell]],
             # Updating an existing label's font size doesn't affect its computed
             # size, so we have to recreate it if the font size changes.
             if label is None or last_font_size != fsize:
-                print(f'New label: {fsize}')
+                debug(f'New label: {fsize}')
                 pad = fsize * cell.relative_padding
                 label = CoreLabel(font_size=fsize, padding=pad)
             last_font_size = fsize
@@ -129,7 +133,7 @@ def create_autosize_table(cells: List[List[AutosizeTableCell]],
     actual_size = _required_size_for_cells(cells, test_base_font_size)
     scale = min(max_width / actual_size[0], max_height / actual_size[1])
     base_font_size = test_base_font_size * scale
-    print(f'base_size: {actual_size}, scale: {scale}')
+    debug(f'base_size: {actual_size}, scale: {scale}')
     for row in cells:
         # The height of each row is proportional to its maximum font size, so
         # we can use that as the size hint.

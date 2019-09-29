@@ -27,7 +27,11 @@ from hearts import Match, Round, RuleSet
 from storage import Storage
 import ui
 
-# Card images from https://github.com/hayeah/playing-cards-assets, MIT licensed.
+def debug(*args, **kwargs):
+    # print(*args, **kw)
+    pass
+
+# Card images from https://code.google.com/archive/p/vector-playing-cards/, public domain.
 CARD_WIDTH_OVER_HEIGHT = 500.0 / 726
 
 def card_image_path(c: Card):
@@ -155,15 +159,15 @@ class HeartsApp(App):
         self.resize_render_event = Clock.schedule_once(lambda dt: self.render(), 1)
 
     def on_pause(self):
-        print('Pause!')
+        debug('Pause!')
         self.storage.store_current_match(self.match)
 
     def on_stop(self):
-        print('Stop!')
+        debug('Stop!')
         self.storage.store_current_match(self.match)
 
     def on_resume(self):
-        print('Resume!')
+        debug('Resume!')
 
     def game_mode(self):
         if not self.match:
@@ -187,7 +191,7 @@ class HeartsApp(App):
         rnd = self.match.current_round
         self.cards_to_pass = set()
         if rnd.is_awaiting_pass():
-            print(f'Pass direction={rnd.pass_info.direction}')
+            debug(f'Pass direction={rnd.pass_info.direction}')
         else:
             self.start_play()
         self.render()
@@ -198,7 +202,7 @@ class HeartsApp(App):
     def start_play(self):
         self.match.current_round.start_play()
         lc = capi.legal_plays(self.match.current_round)
-        print(f'Legal plays (hopefully 2c): {" ".join(c.symbol_string() for c in lc)}')
+        debug(f'Legal plays (hopefully 2c): {" ".join(c.symbol_string() for c in lc)}')
         self.handle_next_play(0)
 
     def start_trick_winner_animation(self, winner: int, expected_cards_played: int):
@@ -216,8 +220,8 @@ class HeartsApp(App):
         nc = self.match.current_round.num_cards_played()
         if self.match.current_round.did_trick_just_finish():
             w = self.match.current_round.last_trick_winner()
-            print(f'Player {w} takes the trick')
-            print(f'Points: {capi.points_taken(self.match.current_round)}')
+            debug(f'Player {w} takes the trick')
+            debug(f'Points: {capi.points_taken(self.match.current_round)}')
             Clock.schedule_once(lambda dt: self.start_trick_winner_animation(w, nc), 1.0)
             self.handle_next_play(1.3)
         else:
@@ -229,17 +233,17 @@ class HeartsApp(App):
         self.round_stats = None
         self.match_stats = None
         self.storage.record_round_stats(self.match.current_round)
-        print(f'Round stats: {self.storage.load_round_stats()}')
-        print('Round over')
+        debug(f'Round stats: {self.storage.load_round_stats()}')
+        debug('Round over')
         self.match.finish_round()
         round_scores = self.match.score_history[-1]
-        print(f'Round points: {round_scores}')
-        print(f'Total points: {self.match.total_scores()}')
+        debug(f'Round points: {round_scores}')
+        debug(f'Total points: {self.match.total_scores()}')
         if self.match.is_finished():
-            print(f'Winners: {self.match.winners()}')
+            debug(f'Winners: {self.match.winners()}')
             self.storage.record_match_stats(self.match)
             self.storage.remove_current_match()
-            print(f'Match stats: {self.storage.load_match_stats()}')
+            debug(f'Match stats: {self.storage.load_match_stats()}')
         self.render()
 
     # `min_delay` is the minimum number of seconds to wait before making the
@@ -267,14 +271,13 @@ class HeartsApp(App):
     def _make_ai_play_in_thread(self, rnd: Round, min_delay: float):
         @mainthread
         def play_card_in_main_thread(card):
-            # FIXME: Find out how these conditions can happen and prevent them.
-            print(f'Main thread: playing {card.symbol_string()}')
+            debug(f'Main thread: playing {card.symbol_string()}')
             if self.match is None or self.match.current_round != rnd:
-                print(f'Round changed!')
+                debug(f'Round changed!')
                 return
             pnum = rnd.current_player_index()
             if card not in rnd.players[pnum].hand:
-                print(f'Player {pnum} does not have {card.symbol_string()}!')
+                debug(f'Player {pnum} does not have {card.symbol_string()}!')
                 return
             self.play_card(card)
 
@@ -283,10 +286,10 @@ class HeartsApp(App):
             pnum = rnd.current_player_index()
             lc = capi.legal_plays(rnd)
             best = capi.best_play(rnd)
-            print(f'Legal plays: {" ".join(c.symbol_string() for c in lc)}')
-            print(f'Player {pnum} plays {best.symbol_string()}')
+            debug(f'Legal plays: {" ".join(c.symbol_string() for c in lc)}')
+            debug(f'Player {pnum} plays {best.symbol_string()}')
             elapsed = self.time_fn() - t
-            print(f'AI took {elapsed} seconds')
+            debug(f'AI took {elapsed} seconds')
             if elapsed < min_delay:
                 self.sleep_fn(min_delay - elapsed)
             play_card_in_main_thread(best)
@@ -309,7 +312,7 @@ class HeartsApp(App):
         passed_cards = [list(self.cards_to_pass)]
         for pnum in range(1, self.match.current_round.rules.num_players):
             pcards = capi.cards_to_pass(self.match.current_round, pnum)
-            print(f'Player {pnum} passes {" ".join(c.symbol_string() for c in pcards)}')
+            debug(f'Player {pnum} passes {" ".join(c.symbol_string() for c in pcards)}')
             passed_cards.append(pcards)
         self.match.current_round.pass_cards(passed_cards)
         Clock.schedule_once(lambda dt: self.start_play(), 1.5)
@@ -319,7 +322,7 @@ class HeartsApp(App):
         return min(self.layout.width, self.layout.height) * 0.07
 
     def render(self):
-        print(f'render: {self.layout.width} {self.layout.height}')
+        debug(f'render: {self.layout.width} {self.layout.height}')
         self.layout.clear_widgets()
         self.render_hand()
         self.render_trick()
@@ -544,7 +547,7 @@ class HeartsApp(App):
     def handle_card_click(self, card: Card):
         if self.ui_mode != UIMode.GAME:
             return
-        print(f'Click: {card.symbol_string()}')
+        debug(f'Click: {card.symbol_string()}')
         mode = self.game_mode()
         if mode == GameMode.PASSING:
             self.set_or_unset_card_to_pass(card)
@@ -557,7 +560,7 @@ class HeartsApp(App):
                         self.played_card_position = self.card_draw_locations.get(card)
                         self.play_card(card)
                     else:
-                        print(f'Illegal play!')
+                        debug(f'Illegal play!')
         return True
 
     def render_controls(self):
@@ -820,7 +823,7 @@ class HeartsApp(App):
                 self.help_text = f.read()
 
         def handle_ref_click(instance, ref):
-            print(f'Clicked on ref: {ref}')
+            debug(f'Clicked on ref: {ref}')
             if ref == 'source':
                 webbrowser.open('https://github.com/dozingcat/RustyHearts')
             elif ref == 'wikipedia':
