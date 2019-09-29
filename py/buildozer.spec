@@ -88,7 +88,7 @@ fullscreen = 1
 #android.permissions = INTERNET
 
 # (int) Target Android API, should be as high as possible.
-android.api = 27
+android.api = 28
 
 # (int) Minimum API your APK will support.
 #android.minapi = 10
