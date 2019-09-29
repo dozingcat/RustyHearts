@@ -45,6 +45,8 @@ Adjust the `Android/Sdk/ndk-bundle` prefix as needed to point to your NDK instal
 1. Copy the resulting shared library at `rust/target/aarch64-linux-android/release/libhearts.so` to `py/lib/libhearts_arm64.so`.
 1. From the `py` directory run `buildozer android debug`. This may take several minutes the first time. If it succeeds, it will create an APK in the `bin` directory, which you can install on a device or emulator with adb.
 
+See https://github.com/kivy/kivy/wiki/Creating-a-Release-APK for creating a signed release build. After running `zipalign`, you may need to run [apksigner](https://developer.android.com/studio/command-line/apksigner) on the aligned APK.
+
 If there are Android build problems, cleaning the build might help: `buildozer android clean`.
 
-Card images from https://github.com/hayeah/playing-cards-assets.
+Card images from https://code.google.com/archive/p/vector-playing-cards/.
