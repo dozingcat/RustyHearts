@@ -5,6 +5,10 @@ from typing import List, Set
 from cards import Card, Deck, Rank, Suit
 import capi
 
+QUEEN_OF_SPADES = Card(Rank.QUEEN, Suit.SPADES)
+JACK_OF_DIAMONDS = Card(Rank.JACK, Suit.DIAMONDS)
+TWO_OF_CLUBS = Card(Rank.TWO, Suit.CLUBS)
+
 @dataclass(frozen=True)
 class RuleSet:
     num_players: int = 4
@@ -75,8 +79,7 @@ class Round:
             p.hand = remaining + p.received_cards
 
     def start_play(self):
-        c2 = Card(rank=Rank.TWO, suit=Suit.CLUBS)
-        leader = [i for i in range(self.rules.num_players) if c2 in self.players[i].hand]
+        leader = [i for i in range(self.rules.num_players) if TWO_OF_CLUBS in self.players[i].hand]
         if len(leader) != 1:
             raise ValueError('2C not found')
         self.current_trick = Trick(leader=leader[0])
@@ -132,6 +135,28 @@ class Round:
     def num_cards_played(self):
         ct = self.current_trick
         return self.rules.num_players * len(self.prev_tricks) + (len(ct.cards) if ct else 0)
+
+    def are_all_points_taken(self):
+        jd = self.rules.jd_minus_10
+        for p in self.players:
+            hand = p.hand
+            if QUEEN_OF_SPADES in hand:
+                return False
+            if jd and (JACK_OF_DIAMONDS in hand):
+                return False
+            if any(c.suit == Suit.HEARTS for c in hand):
+                return False
+        return True
+
+    def will_leader_take_all_tricks(self):
+        assert self.current_trick and len(self.current_trick.cards) == 0
+        # This could be optimized.
+        leader = self.current_trick.leader
+        for lc in self.players[leader].hand:
+            for i, p in enumerate(self.players):
+                if i != leader and any(c.suit == lc.suit and c.rank > lc.rank for c in p.hand):
+                    return False
+        return True
 
 
 class Match:

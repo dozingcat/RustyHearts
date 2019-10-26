@@ -64,6 +64,13 @@ class UIMode(Enum):
     HELP = 5
 
 
+@unique
+class AutoplayMode(Enum):
+    NONE = 0
+    ALL_POINTS_TAKEN = 1
+    ALL_HIGH_CARDS = 2
+
+
 def sorted_cards_for_display(cards: Iterable[Card]):
     sc = []
     for suit in [Suit.SPADES, Suit.HEARTS, Suit.CLUBS, Suit.DIAMONDS]:
@@ -124,6 +131,7 @@ class HeartsApp(App):
         self.resize_render_event = None
         self.cards_to_pass = set()
         self.ui_mode = UIMode.GAME
+        self.autoplay_mode = AutoplayMode.NONE
         self.round_stats = None
         self.match_stats = None
         self.help_text = None
@@ -215,23 +223,53 @@ class HeartsApp(App):
             self.render()
             self.animating_trick_winner = None
 
+    def card_play_animation_duration(self):
+        return 0.25 if self.autoplay_mode == AutoplayMode.NONE else 0.1
+
+    def delay_between_cards_in_trick(self):
+        after_anim_delay = 0.25 if self.autoplay_mode == AutoplayMode.NONE else 0.05
+        return self.card_play_animation_duration() + after_anim_delay
+
+    def delay_before_trick_winner_animation(self):
+        return 1.0 if self.autoplay_mode == AutoplayMode.NONE else 0.25
+
+    def trick_winner_animation_duration(self):
+        return 0.25 if self.autoplay_mode == AutoplayMode.NONE else 0.1
+
+    def delay_between_tricks(self):
+        return (0.05 +
+            self.delay_before_trick_winner_animation() +
+            self.trick_winner_animation_duration())
+
     def play_card(self, card: Card):
-        self.match.current_round.play_card(card)
-        nc = self.match.current_round.num_cards_played()
-        if self.match.current_round.did_trick_just_finish():
-            w = self.match.current_round.last_trick_winner()
+        # Record where this card was so we can animate from it. This is ugly.
+        self.played_card_position = self.card_draw_locations.get(card)
+        rnd = self.match.current_round
+        rnd.play_card(card)
+        nc = rnd.num_cards_played()
+        if rnd.did_trick_just_finish():
+            w = rnd.last_trick_winner()
             debug(f'Player {w} takes the trick')
-            debug(f'Points: {capi.points_taken(self.match.current_round)}')
-            Clock.schedule_once(lambda dt: self.start_trick_winner_animation(w, nc), 1.0)
-            self.handle_next_play(1.3)
+            debug(f'Points: {capi.points_taken(rnd)}')
+            if self.autoplay_mode == AutoplayMode.NONE and len(rnd.players[w].hand) > 1:
+                if rnd.are_all_points_taken():
+                    print('All points taken')
+                    self.autoplay_mode = AutoplayMode.ALL_POINTS_TAKEN
+                elif rnd.will_leader_take_all_tricks():
+                    debug(f'Player {w} takes the rest')
+                    self.autoplay_mode = AutoplayMode.ALL_HIGH_CARDS
+            Clock.schedule_once(lambda dt: self.start_trick_winner_animation(w, nc),
+                self.delay_before_trick_winner_animation())
+            self.handle_next_play(self.delay_between_tricks())
         else:
-            self.handle_next_play(0.5)
+            self.handle_next_play(self.delay_between_cards_in_trick())
         self.render()
 
     def do_round_finished(self):
         assert self.match.current_round
         self.round_stats = None
         self.match_stats = None
+        self.autoplay_mode = AutoplayMode.NONE
         self.storage.record_round_stats(self.match.current_round)
         debug(f'Round stats: {self.storage.load_round_stats()}')
         debug('Round over')
@@ -263,7 +301,7 @@ class HeartsApp(App):
             # incorrectly redraw cards in the last trick that were already
             # animated to the trick winner.
             self.render()
-        if pnum != 0:
+        if pnum != 0 or self.autoplay_mode != AutoplayMode.NONE:
             # Compute the best card to play in a separate thread so the UI
             # stays responsive and animation timers work as expected.
             self._make_ai_play_in_thread(rnd, min_delay)
@@ -284,9 +322,11 @@ class HeartsApp(App):
         def run_ai_thread():
             t = self.time_fn()
             pnum = rnd.current_player_index()
-            lc = capi.legal_plays(rnd)
-            best = capi.best_play(rnd)
-            debug(f'Legal plays: {" ".join(c.symbol_string() for c in lc)}')
+            if self.autoplay_mode == AutoplayMode.NONE:
+                best = capi.best_play(rnd)
+            else:
+                lc = capi.legal_plays(rnd)
+                best = lc[0]
             debug(f'Player {pnum} plays {best.symbol_string()}')
             elapsed = self.time_fn() - t
             debug(f'AI took {elapsed} seconds')
@@ -436,43 +476,54 @@ class HeartsApp(App):
                 end_pos = (
                     end_positions[pnum][0] * self.layout.width,
                     end_positions[pnum][1] * self.layout.height)
-                show_anim = (
+                show_anim_from_hand = (
                     self.animating_trick_winner is None and
                     self.last_animated_card != card and
                     i == len(ct.cards) - 1)
-                if show_anim:
+                if show_anim_from_hand:
                     start_pos = (
                         start_positions[pnum][0]() * self.layout.width,
                         start_positions[pnum][1]() * self.layout.height)
                     img = ImageButton(source=img_path, pos=start_pos, size_hint=(0.2, 0.2))
                     self.layout.add_widget(img)
-                    anim = Animation(x=end_pos[0], y=end_pos[1], t='out_cubic', duration=0.25)
+                    anim = Animation(x=end_pos[0], y=end_pos[1], t='out_cubic',
+                        duration=self.card_play_animation_duration())
                     anim.start(img)
                     self.last_animated_card = card
                 else:
                     img = ImageButton(source=img_path, pos=end_pos, size_hint=(0.2, 0.2))
                     self.layout.add_widget(img)
                     if self.animating_trick_winner is not None:
-                        # HERE: Animate to correct position
+                        # Animate to trick winner's position.
                         tx, ty = [
                             (0.4, -0.2), (-0.2, 0.55), (0.4, 1.0), (1.0, 0.55)
                         ][self.animating_trick_winner]
                         anim = Animation(
                             x = tx * self.layout.width,
                             y = ty * self.layout.height,
-                            t='out_cubic', duration=0.25)
+                            t='out_cubic',
+                            duration=self.trick_winner_animation_duration())
                         anim.start(img)
 
 
     def render_message(self):
-        if self.ui_mode != UIMode.GAME:
-            return
-        if self.game_mode() == GameMode.PASSING:
+        def get_message():
+            if self.ui_mode != UIMode.GAME:
+                return ''
+            elif self.game_mode() == GameMode.PASSING:
+                return passing_text(self.match.current_round)
+            elif self.autoplay_mode == AutoplayMode.ALL_POINTS_TAKEN:
+                return localize('All points taken')
+            elif self.autoplay_mode == AutoplayMode.ALL_HIGH_CARDS:
+                return localize('Remaining tricks claimed')
+
+        msg = get_message()
+        if msg:
             font_size = self.default_font_size()
             label_height_px = font_size * 1.8
             label_height_frac = label_height_px / self.layout.height
             pass_label = ui.make_label(
-                text=passing_text(self.match.current_round),
+                text=msg,
                 font_size=font_size,
                 pos_hint={'x': 0.1, 'y': 0.5 - label_height_frac / 2},
                 size_hint=(0.8, label_height_frac))
@@ -545,7 +596,7 @@ class HeartsApp(App):
 
 
     def handle_card_click(self, card: Card):
-        if self.ui_mode != UIMode.GAME:
+        if self.ui_mode != UIMode.GAME or self.autoplay_mode != AutoplayMode.NONE:
             return
         debug(f'Click: {card.symbol_string()}')
         mode = self.game_mode()
@@ -556,8 +607,6 @@ class HeartsApp(App):
                 legal = capi.legal_plays(self.match.current_round)
                 if self.match.current_round.current_player_index() == 0:
                     if card in legal:
-                        # Record where this card was so we can animate from it. This is ugly.
-                        self.played_card_position = self.card_draw_locations.get(card)
                         self.play_card(card)
                     else:
                         debug(f'Illegal play!')
