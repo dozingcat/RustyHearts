@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum, IntEnum, unique
+from functools import total_ordering
 import math
 import random
 from typing import Union
@@ -24,6 +25,7 @@ class Suit(Enum):
 
 
 @unique
+@total_ordering
 class Rank(Enum):
     TWO = (2, '2')
     THREE = (3, '3')
@@ -42,6 +44,9 @@ class Rank(Enum):
     def __init__(self, rank_val, char):
         self.rank_val = rank_val
         self.char = char
+
+    def __lt__(self, other):
+        return self.rank_val < other.rank_val
 
     @classmethod
     def parse(cls, val: Union[int, str]):
