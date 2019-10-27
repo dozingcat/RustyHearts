@@ -2,7 +2,7 @@ use crate::card::*;
 use crate::hearts;
 use crate::hearts_ai;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json;
 
 #[derive(Debug)]
@@ -62,9 +62,9 @@ impl JsonRuleSet {
             queen_breaks_hearts: self.queen_breaks_hearts,
             jd_minus_10: self.jd_minus_10,
             moon_shooting: if self.shooting_disabled {
-                hearts::MoonShooting::DISABLED
+                hearts::MoonShooting::Disabled
             } else {
-                hearts::MoonShooting::OPPONENTS_PLUS_26
+                hearts::MoonShooting::OpponentsPlus26
             },
         });
     }
@@ -298,7 +298,7 @@ mod test {
         let expected = hearts::RuleSet {
             point_limit: 42,
             jd_minus_10: true,
-            moon_shooting: hearts::MoonShooting::DISABLED,
+            moon_shooting: hearts::MoonShooting::Disabled,
             ..Default::default()
         };
         assert_eq!(req.rules, expected);
@@ -336,7 +336,7 @@ mod test {
             points_on_first_trick: true,
             queen_breaks_hearts: true,
             jd_minus_10: false,
-            moon_shooting: hearts::MoonShooting::OPPONENTS_PLUS_26,
+            moon_shooting: hearts::MoonShooting::OpponentsPlus26,
         };
         assert_eq!(req.rules, expected);
     }

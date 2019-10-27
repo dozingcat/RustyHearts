@@ -66,67 +66,66 @@ pub fn choose_cards_to_pass_random(req: &CardsToPassRequest) -> Vec<Card> {
     return req.hand[0..(req.num_cards as usize)].to_vec();
 }
 
+fn danger_for_card(card: &Card, ranks: &[Rank], req: &CardsToPassRequest) -> i32 {
+    assert!(ranks.len() > 0);
+    let cval = card.rank.value as i32;
+    let lowest_rank_in_suit = ranks[ranks.len() - 1].value as i32;
+    match card.suit {
+        Suit::Spades => {
+            if card.rank < Rank::QUEEN {
+                return 0;
+            }
+            // Assuming 4 or more spades are safe, probably not true.
+            if ranks.len() >= 4 {
+                return 0;
+            }
+            // Always pass QS.
+            if card.rank == Rank::QUEEN {
+                return 100;
+            }
+            // If we're passing the queen right, it's ok to keep AS and KS
+            // because we'll be able to safely play them (as long as we
+            // have a lower spade).
+            let passing_right = ((req.direction as usize) == req.rules.num_players - 1);
+            let has_queen = ranks.contains(&Rank::QUEEN);
+            let has_low_spade = (ranks[ranks.len() - 1] < Rank::QUEEN);
+            return if passing_right && has_queen && has_low_spade {
+                cval - 5
+            } else {
+                100
+            };
+        }
+        Suit::Hearts => {
+            return cval + lowest_rank_in_suit;
+        }
+        Suit::Diamonds => {
+            return cval + lowest_rank_in_suit;
+        }
+        Suit::Clubs => {
+            // 2C is "higher" than AC for purposes of passing.
+            // TODO: We probably want to pass AC less often because winning
+            // the first trick can be helpful and doesn't risk points.
+            let adj_rank = (if cval == 2 { 14 } else { cval - 1 });
+            if lowest_rank_in_suit == 2 {
+                // Probably pass singleton 2C.
+                if ranks.len() == 1 {
+                    return 50;
+                }
+                let second_lowest_club = ranks[ranks.len() - 2].value as i32;
+                return adj_rank + second_lowest_club;
+            } else {
+                return adj_rank + lowest_rank_in_suit - 1;
+            }
+        }
+    }
+}
+
 pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
-    let result: Vec<Card> = Vec::new();
     let mut suit_ranks: HashMap<Suit, Vec<Rank>> = HashMap::new();
     for suit in vec![Suit::Spades, Suit::Hearts, Suit::Diamonds, Suit::Clubs] {
         suit_ranks.insert(suit, ranks_for_suit(&req.hand, suit));
     }
     let mut card_danger: HashMap<Card, i32> = HashMap::new();
-
-    fn danger_for_card(card: &Card, ranks: &[Rank], req: &CardsToPassRequest) -> i32 {
-        assert!(ranks.len() > 0);
-        let cval = card.rank.value as i32;
-        let lowest_rank_in_suit = ranks[ranks.len() - 1].value as i32;
-        match card.suit {
-            Suit::Spades => {
-                if card.rank < Rank::QUEEN {
-                    return 0;
-                }
-                // Assuming 4 or more spades are safe, probably not true.
-                if ranks.len() >= 4 {
-                    return 0;
-                }
-                // Always pass QS.
-                if card.rank == Rank::QUEEN {
-                    return 100;
-                }
-                // If we're passing the queen right, it's ok to keep AS and KS
-                // because we'll be able to safely play them (as long as we
-                // have a lower spade).
-                let passing_right = ((req.direction as usize) == req.rules.num_players - 1);
-                let has_queen = ranks.contains(&Rank::QUEEN);
-                let has_low_spade = (ranks[ranks.len() - 1] < Rank::QUEEN);
-                return (if passing_right && has_queen && has_low_spade {
-                    cval - 5
-                } else {
-                    100
-                });
-            }
-            Suit::Hearts => {
-                return cval + lowest_rank_in_suit;
-            }
-            Suit::Diamonds => {
-                return cval + lowest_rank_in_suit;
-            }
-            Suit::Clubs => {
-                // 2C is "higher" than AC for purposes of passing.
-                // TODO: We probably want to pass AC less often because winning
-                // the first trick can be helpful and doesn't risk points.
-                let adj_rank = (if cval == 2 { 14 } else { cval - 1 });
-                if lowest_rank_in_suit == 2 {
-                    // Probably pass singleton 2C.
-                    if ranks.len() == 1 {
-                        return 50;
-                    }
-                    let second_lowest_club = ranks[ranks.len() - 2].value as i32;
-                    return adj_rank + second_lowest_club;
-                } else {
-                    return adj_rank + lowest_rank_in_suit - 1;
-                }
-            }
-        }
-    }
     for &c in req.hand.iter() {
         card_danger.insert(
             c,
@@ -171,7 +170,7 @@ fn is_nonrecursive(strategy: &CardToPlayStrategy) -> bool {
     return match strategy {
         CardToPlayStrategy::Random => true,
         CardToPlayStrategy::AvoidPoints => true,
-        CardToPlayStrategy::MixedRandomAvoidPoints(p_random) => true,
+        CardToPlayStrategy::MixedRandomAvoidPoints(_) => true,
         _ => false,
     };
 }
@@ -360,7 +359,7 @@ fn do_rollout(round: &mut hearts::Round, strategy: &CardToPlayStrategy, mut rng:
         // tries to infinitely recurse.
         let card_to_play =
             choose_card_nonrecursive(&CardToPlayRequest::from_round(&round), strategy, &mut rng);
-        round.play_card(&card_to_play).expect("");
+        round.play_card(&card_to_play);
     }
 }
 
@@ -441,7 +440,7 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
             fixed_cards: HashSet::new(),
         });
     }
-    if (req.passed_cards.len() > 0) {
+    if req.passed_cards.len() > 0 {
         let passed_to = (req.current_player_index() + (req.pass_direction as usize)) % num_players;
         for c in req.passed_cards.iter() {
             constraints[passed_to].fixed_cards.insert(*c);
@@ -509,7 +508,6 @@ pub fn choose_card_monte_carlo(
     println!("");
     */
 
-    let cur_points = hearts::points_for_tricks(&req.prev_tricks, &req.rules)[pnum as usize];
     let dist_req = make_card_distribution_req(&req);
     for _s in 0..mc_params.num_hands {
         let maybe_hypo_round = possible_round(req, &dist_req, &mut rng);
