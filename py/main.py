@@ -253,7 +253,7 @@ class HeartsApp(App):
             debug(f'Points: {capi.points_taken(rnd)}')
             if self.autoplay_mode == AutoplayMode.NONE and len(rnd.players[w].hand) > 1:
                 if rnd.are_all_points_taken():
-                    print('All points taken')
+                    debug('All points taken')
                     self.autoplay_mode = AutoplayMode.ALL_POINTS_TAKEN
                 elif rnd.will_leader_take_all_tricks():
                     debug(f'Player {w} takes the rest')

@@ -2,12 +2,7 @@ mod card;
 mod hearts;
 mod hearts_ai;
 
-use std::io;
-
-use rand::rngs::StdRng;
 use rand::thread_rng;
-use rand::Rng;
-use rand::SeedableRng;
 
 use card::*;
 use hearts_ai::CardToPlayStrategy;
@@ -120,7 +115,7 @@ fn main() {
                     round.current_player_index(),
                     card_to_play.symbol_string()
                 );
-                round.play_card(&card_to_play).expect("");
+                round.play_card(&card_to_play);
                 if round.current_trick.cards.is_empty() {
                     let t = round.prev_tricks.last().expect("");
                     println!("P{} takes the trick", t.winner);

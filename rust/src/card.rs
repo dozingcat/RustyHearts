@@ -415,7 +415,7 @@ mod test {
 
     fn make_constraints(n: usize, num_cards: usize) -> Vec<CardDistributionPlayerConstraint> {
         let mut c: Vec<CardDistributionPlayerConstraint> = Vec::new();
-        for i in 0..n {
+        for _ in 0..n {
             c.push(CardDistributionPlayerConstraint {
                 num_cards: num_cards,
                 voided_suits: HashSet::new(),

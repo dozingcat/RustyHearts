@@ -4,10 +4,7 @@ mod hearts_ai;
 
 use std::io;
 
-use rand::rngs::StdRng;
 use rand::thread_rng;
-use rand::Rng;
-use rand::SeedableRng;
 
 use card::*;
 use hearts_ai::CardToPlayStrategy;
@@ -47,7 +44,7 @@ fn main() {
                             println!("Cannot pass those cards");
                         }
                     }
-                    Err(error) => {
+                    Err(_) => {
                         println!("Invalid input");
                     }
                 };
@@ -99,7 +96,7 @@ fn main() {
                 match Card::from(&input.trim()) {
                     Ok(card) => {
                         if round.legal_plays().contains(&card) {
-                            round.play_card(&card).expect("");
+                            round.play_card(&card);
                             println!("You played {}", card.symbol_string());
                             if round.current_trick.cards.is_empty() {
                                 let t = round.prev_tricks.last().expect("");
@@ -109,7 +106,7 @@ fn main() {
                             println!("{} is not a legal card to play", card.symbol_string());
                         }
                     }
-                    Err(error) => {
+                    Err(_) => {
                         println!("Invalid card");
                     }
                 };
@@ -120,7 +117,7 @@ fn main() {
                 round.current_player_index(),
                 ai_card.symbol_string()
             );
-            round.play_card(&ai_card).expect("");
+            round.play_card(&ai_card);
             if round.current_trick.cards.is_empty() {
                 let t = round.prev_tricks.last().expect("");
                 print_trick_winner(t.winner);

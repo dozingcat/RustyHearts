@@ -3,16 +3,11 @@ mod hearts;
 mod hearts_ai;
 mod hearts_json;
 
-use std::ffi::CStr;
-use std::io;
 use std::io::Read;
-use std::ptr;
 use std::slice;
 
 use rand::thread_rng;
-use rand::Rng;
 
-use card::*;
 use hearts_ai::MonteCarloParams;
 use hearts_ai::{CardToPlayRequest, CardToPlayStrategy, CardsToPassRequest};
 
@@ -30,7 +25,7 @@ use hearts_ai::{CardToPlayRequest, CardToPlayStrategy, CardsToPassRequest};
 fn main() {
     let mut rng = thread_rng();
     let mut buffer = String::new();
-    std::io::stdin().read_to_string(&mut buffer);
+    std::io::stdin().read_to_string(&mut buffer).expect("");
     let req = hearts_json::parse_card_to_play_request(&buffer).unwrap();
     let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
         0.1,
@@ -66,7 +61,7 @@ fn card_to_play_req_from_json(s: *const u8, len: u32) -> CardToPlayRequest {
 // See ffi_test.py for an example of how to call.
 #[no_mangle]
 pub extern "C" fn cards_to_pass_from_json(s: *const u8, len: u32, pass_out: *mut u8, out_len: u32) {
-    let req = unsafe { cards_to_pass_req_from_json(s, len) };
+    let req = cards_to_pass_req_from_json(s, len);
     let cards_to_pass = hearts_ai::choose_cards_to_pass(&req);
     if req.hand.len() > (out_len as usize) {
         panic!(
@@ -88,7 +83,7 @@ pub extern "C" fn cards_to_pass_from_json(s: *const u8, len: u32, pass_out: *mut
 // See ffi_test.py for an example of how to call.
 #[no_mangle]
 pub extern "C" fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
-    let req = unsafe { card_to_play_req_from_json(s, len) };
+    let req = card_to_play_req_from_json(s, len);
     let ai_strat = CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
         0.1,
         MonteCarloParams {
@@ -112,7 +107,7 @@ pub extern "C" fn card_to_play_from_json(s: *const u8, len: u32) -> i32 {
 // See ffi_test.py for an example of how to call.
 #[no_mangle]
 pub extern "C" fn legal_plays_from_json(s: *const u8, len: u32, legal_out: *mut u8, out_len: u32) {
-    let req = unsafe { card_to_play_req_from_json(s, len) };
+    let req = card_to_play_req_from_json(s, len);
     let legal_plays = req.legal_plays();
     if req.hand.len() > (out_len as usize) {
         panic!(

@@ -34,8 +34,8 @@ impl Player {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MoonShooting {
-    DISABLED,
-    OPPONENTS_PLUS_26,
+    Disabled,
+    OpponentsPlus26,
     // TODO: Allow option of subtracting 26 from the shooter's score.
 }
 
@@ -68,7 +68,7 @@ impl Default for RuleSet {
             points_on_first_trick: false,
             queen_breaks_hearts: false,
             jd_minus_10: false,
-            moon_shooting: MoonShooting::OPPONENTS_PLUS_26,
+            moon_shooting: MoonShooting::OpponentsPlus26,
         };
     }
 }
@@ -93,17 +93,17 @@ pub fn points_for_cards(cards: &[Card], rules: &RuleSet) -> i32 {
 }
 
 // This takes shooting the moon into account. If you don't want that, set
-// rules.moon_shooting to `MoonShooting::DISABLED`.
+// rules.moon_shooting to `MoonShooting::Disabled`.
 pub fn points_for_tricks(tricks: &[Trick], rules: &RuleSet) -> Vec<i32> {
     let mut points: Vec<i32> = Vec::new();
     points.resize(rules.num_players, 0);
     for t in tricks.iter() {
         points[t.winner as usize] += points_for_cards(&t.cards, rules);
     }
-    if rules.moon_shooting != MoonShooting::DISABLED {
+    if rules.moon_shooting != MoonShooting::Disabled {
         if let Some(shooter) = moon_shooter(tricks, &points, rules) {
             for p in 0..rules.num_players {
-                points[p] += if (p == shooter) { -26 } else { 26 };
+                points[p] += if p == shooter { -26 } else { 26 };
             }
         }
     }
@@ -304,24 +304,24 @@ impl Round {
         self.status = RoundStatus::Playing;
     }
 
-    pub fn play_card(&mut self, card: &Card) -> Result<(), ()> {
-        let pos = self.current_player().hand.iter().position(|&c| c == *card);
-        if let Some(index) = pos {
-            self.current_player_mut().hand.remove(index);
-            self.current_trick.cards.push(*card);
-            if self.current_trick.cards.len() == self.players.len() {
-                let winner_index = trick_winner_index(&self.current_trick.cards);
-                let winner = (self.current_trick.leader + winner_index) % self.players.len();
-                self.prev_tricks.push(Trick {
-                    leader: self.current_trick.leader,
-                    cards: self.current_trick.cards.clone(),
-                    winner: winner,
-                });
-                self.current_trick = TrickInProgress::new(winner);
-            }
-            return Ok(());
-        } else {
-            return Err(());
+    pub fn play_card(&mut self, card: &Card) {
+        let index = self
+            .current_player()
+            .hand
+            .iter()
+            .position(|&c| c == *card)
+            .unwrap();
+        self.current_player_mut().hand.remove(index);
+        self.current_trick.cards.push(*card);
+        if self.current_trick.cards.len() == self.players.len() {
+            let winner_index = trick_winner_index(&self.current_trick.cards);
+            let winner = (self.current_trick.leader + winner_index) % self.players.len();
+            self.prev_tricks.push(Trick {
+                leader: self.current_trick.leader,
+                cards: self.current_trick.cards.clone(),
+                winner: winner,
+            });
+            self.current_trick = TrickInProgress::new(winner);
         }
     }
 
@@ -544,7 +544,7 @@ mod test {
 
     #[test]
     fn test_first_trick_only_points() {
-        let mut rules = RuleSet::default();
+        let rules = RuleSet::default();
         let hand = c("AH TH QS 7H");
         let cur_trick = TrickInProgress {
             leader: 0,
