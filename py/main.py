@@ -28,7 +28,7 @@ from storage import Storage
 import ui
 
 def debug(*args, **kwargs):
-    # print(*args, **kw)
+    # print(*args, **kwargs)
     pass
 
 # Card images from https://code.google.com/archive/p/vector-playing-cards/, public domain.
