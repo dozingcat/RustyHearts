@@ -1,6 +1,6 @@
 [b]Hearts[/b]
 
-Version 1.0.0, Sep 28 2019
+Version 1.0.1, Oct 27 2019
 Copyright © 2019 Brian Nenninger
 Comments or suggestions: [ref=email]bnenning@gmail.com[/ref]
 
@@ -24,6 +24,6 @@ A round is over when all cards have been played. Each player gets 1 point for ea
 
 Hearts does not collect any personal information.
 
-Hearts is free and open source software. It is released under [u][ref=link_gpl3]version 3 of the GNU GPL[/ref][/u]. It includes code and assets from other parties, used in accordance with their licenses. [u][ref=link_thirdparty]See details[/ref][/u].
+Hearts is free and open source software. It is released under [u][ref=gpl3]version 3 of the GNU GPL[/ref][/u]. It includes code and assets from other parties, used in accordance with their licenses. [u][ref=thirdparty]See details[/ref][/u].
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
