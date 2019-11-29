@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+import collections
+from dataclasses import dataclass
 from enum import Enum, unique
 import random
 import threading
 import time
-from typing import Iterable, List
+from typing import Dict, Iterable, List, OrderedDict
 import webbrowser
 
 from kivy.animation import Animation
@@ -44,6 +46,14 @@ MENU_ICON_PATH = 'assets/menu.png'
 # https://kivy.org/doc/stable/api-kivy.uix.behaviors.html
 class ImageButton(ButtonBehavior, Image):
     pass
+
+
+@dataclass
+class Rect:
+    x: float
+    y: float
+    width: float
+    height: float
 
 
 @unique
@@ -139,8 +149,6 @@ class HeartsApp(App):
         # Keep track of the last animated card so we don't repeat the animation
         # if the window is re-rendered.
         self.last_animated_card = None
-        # Keep track of where each card in the player's hand was drawn.
-        self.card_draw_locations = {}
         # And where the card the player clicked on should animate from.
         self.played_card_position = None
         self.animating_trick_winner = None
@@ -243,7 +251,7 @@ class HeartsApp(App):
 
     def play_card(self, card: Card):
         # Record where this card was so we can animate from it. This is ugly.
-        self.played_card_position = self.card_draw_locations.get(card)
+        self.played_card_position = self._hand_card_positions().get(card)
         rnd = self.match.current_round
         rnd.play_card(card)
         nc = rnd.num_cards_played()
@@ -372,10 +380,41 @@ class HeartsApp(App):
         self.render_controls()
         self.render_help()
 
-    def render_hand(self):
+    def _hand_card_positions(self) -> OrderedDict[Card, Rect]:
+
+        def add_card_positions(positions, cards: List[Card], y=0.05, x_offset=0):
+            height_frac = 0.2
+            height_px = height_frac * self.layout.height
+            width_px = height_px * CARD_WIDTH_OVER_HEIGHT
+            width_frac = width_px / self.layout.width
+            max_hand_width = 0.9
+            x_start = (1 - max_hand_width) / 2
+            x_incr = (
+                0 if len(cards) <= 1
+                else (max_hand_width - width_px / self.layout.width) / (len(cards) - 1))
+            if len(cards) <= 1:
+                x_start = 0.5 - width_frac / 2
+            elif 0 < x_incr < width_frac / 4:
+                # Not enough of each card's horizontal portion is visible, shrink so it is.
+                shrink_ratio = x_incr * 4 / width_frac
+                height_frac *= shrink_ratio
+                width_frac *= shrink_ratio
+                width_px *= shrink_ratio
+                x_incr = (max_hand_width - width_px / self.layout.width) / (len(cards) - 1)
+            elif x_incr > width_frac:
+                # Get rid of the space between cards.
+                hand_width = len(cards) * width_frac
+                x_incr = width_frac
+                x_start = 0.5 - hand_width / 2
+            for i, c in enumerate(cards):
+                if c is None:
+                    continue
+                x = x_start + ((i + x_offset) * x_incr)
+                positions[c] = Rect(x=x, y=y, width=width_frac, height=height_frac)
+
+        positions = collections.OrderedDict()
         if not self.match.current_round:
-            return
-        self.card_draw_locations.clear()
+            return positions
         hand = sorted_cards_for_display(self.match.current_round.players[0].hand)
         if self.layout.height > self.layout.width and len(hand) > 7:
             # For an odd number of cards, the top row should have the extra card.
@@ -385,12 +424,13 @@ class HeartsApp(App):
             bottom_cards = hand[split:]
             if odd:
                 bottom_cards.append(None)
-            self.render_cards(top_cards, y=0.125)
-            self.render_cards(bottom_cards, y=0.05, x_offset=0.5 if odd else 0)
+            add_card_positions(positions, top_cards, y=0.125)
+            add_card_positions(positions, bottom_cards, y=0.05, x_offset=0.5 if odd else 0)
         else:
-            self.render_cards(hand)
+            add_card_positions(positions, hand)
+        return positions
 
-    def _card_opacities(self):
+    def _hand_card_opacities(self) -> Dict[Card, float]:
         if self.game_mode() == GameMode.PASSING:
             # Highlight cards selected to be passed, or received cards.
             if self.player().received_cards:
@@ -410,47 +450,22 @@ class HeartsApp(App):
                 return {c: 0.6 for c in self.player().hand}
         return {}
 
-    def render_cards(self, cards: List[Card], y=0.05, x_offset=0):
-        height_frac = 0.2
-        height_px = height_frac * self.layout.height
-        width_px = height_px * CARD_WIDTH_OVER_HEIGHT
-        width_frac = width_px / self.layout.width
-        x_start = 0.05
-        x_end = 0.95
-        x_incr = (
-            0 if len(cards) <= 1
-            else (x_end - x_start - width_px / self.layout.width) / (len(cards) - 1))
-        if len(cards) <= 1:
-            x_start = 0.5 - width_frac / 2
-        elif 0 < x_incr < width_frac / 4:
-            # Not enough of each card's horizontal portion is visible, shrink so it is.
-            shrink_ratio = x_incr * 4 / width_frac
-            height_frac *= shrink_ratio
-            width_frac *= shrink_ratio
-            width_px *= shrink_ratio
-            x_incr = (x_end - x_start - width_px / self.layout.width) / (len(cards) - 1)
-        elif x_incr > width_frac:
-            # Get rid of the space between cards.
-            hand_width = len(cards) * width_frac
-            x_incr = width_frac
-            x_start = 0.5 - hand_width / 2
-            x_end = x_start + hand_width
-        size = (width_frac, height_frac)
-        card_opacities = self._card_opacities()
-        for i, c in enumerate(cards):
-            if c is None:
-                continue
-            x = x_start + ((i + x_offset) * x_incr)
-            pos = {'x': x, 'y': y}
-            img_path = card_image_path(c)
-            opacity = card_opacities.get(c, 1.0)
+    def render_hand(self):
+        if not self.match.current_round:
+            return
+        positions = self._hand_card_positions()
+        opacities = self._hand_card_opacities()
+        for card, rect in positions.items():
+            pos = {'x': rect.x, 'y': rect.y}
+            size = (rect.width, rect.height)
+            img_path = card_image_path(card)
+            opacity = opacities.get(card, 1.0)
             if opacity < 1.0:
                 black = Image(source=BLACK_CARD_IMAGE_PATH, size_hint=size, pos_hint=pos)
                 self.layout.add_widget(black)
             img = ImageButton(source=img_path, size_hint=size, pos_hint=pos)
             img.opacity = opacity
-            img.bind(on_press=lambda b, c=c: self.handle_card_click(c))
-            self.card_draw_locations[c] = (x, y)
+            img.bind(on_press=lambda b, c=card: self.handle_card_click(c))
             self.layout.add_widget(img)
 
     def render_trick(self):
@@ -462,9 +477,9 @@ class HeartsApp(App):
         if ct:
             # (0, 0) puts the bottom left of the card at the bottom left of the display.
             # Have player's cards start from where they were last drawn in the hand.
-            played_card_pos = self.played_card_position or [0.4, 0.05]
+            played_card_pos = self.played_card_position or Rect(x=0.4, y=0.05, width=0, height=0)
             start_positions = [
-                [lambda: played_card_pos[0], lambda: played_card_pos[1]],
+                [lambda: played_card_pos.x, lambda: played_card_pos.y],
                 [lambda: -0.2, lambda: random.uniform(0.35, 0.75)],
                 [lambda: random.uniform(0.2, 0.6), lambda: 1.0],
                 [lambda: 1.0, lambda: random.uniform(0.35, 0.75)],
