@@ -41,15 +41,17 @@ fn main() {
     // 12 points for win, 6 for 2-way tie, 4 for 3-way, 3 for 4-way.
     let mut victory_points: Vec<u64> = Vec::new();
     victory_points.resize(rules.num_players, 0);
+    let mut total_rounds = 0u32;
 
-    for match_num in 0..1000000 {
+    for match_num in 0..10 {
         println!("Match {}", match_num + 1);
         let mut match_scores: Vec<i32> = Vec::new();
         match_scores.resize(rules.num_players, 0);
         let mut round_num = 0u32;
         while *match_scores.iter().max().unwrap() < (rules.point_limit as i32) {
             round_num += 1;
-            println!("Round {}", round_num);
+            total_rounds += 1;
+            println!("Round {} (total {})", round_num, total_rounds);
             deck.shuffle(&mut rng);
             let pass_dir = round_num % 4;
             let mut round = hearts::Round::deal(&deck, &rules, &match_scores, pass_dir);
@@ -85,7 +87,7 @@ fn main() {
             let strategies = vec![
                 CardToPlayStrategy::AvoidPoints,
                 CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
-                    0.1,
+                    0.2,
                     MonteCarloParams {
                         num_hands: 50,
                         rollouts_per_hand: 20,
@@ -95,8 +97,7 @@ fn main() {
                     num_hands: 50,
                     rollouts_per_hand: 20,
                 }),
-                CardToPlayStrategy::MonteCarloMixedRandomAvoidPoints(
-                    0.1,
+                CardToPlayStrategy::MonteCarloAvoidPoints(
                     MonteCarloParams {
                         num_hands: 50,
                         rollouts_per_hand: 20,
@@ -106,7 +107,7 @@ fn main() {
 
             while !round.is_over() {
                 let card_to_play = hearts_ai::choose_card(
-                    &hearts_ai::CardToPlayRequest::from_round(&round),
+                    &round,
                     &strategies[round.current_player_index()],
                     &mut rng,
                 );

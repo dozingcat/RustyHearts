@@ -146,8 +146,8 @@ struct JsonCardToPlayRequest {
 }
 
 impl JsonCardToPlayRequest {
-    fn to_request(&self) -> Result<hearts_ai::CardToPlayRequest, CardError> {
-        return Ok(hearts_ai::CardToPlayRequest {
+    fn to_request(&self) -> Result<hearts_ai::CardToPlayDirectRequest, CardError> {
+        return Ok(hearts_ai::CardToPlayDirectRequest {
             rules: self.rules.to_rules()?,
             scores_before_round: self.scores_before_round.clone(),
             hand: cards_from_str(&self.hand)?,
@@ -192,7 +192,7 @@ pub fn parse_cards_to_pass_request(s: &str) -> Result<hearts_ai::CardsToPassRequ
     return Ok(req.to_request()?);
 }
 
-pub fn parse_card_to_play_request(s: &str) -> Result<hearts_ai::CardToPlayRequest, ParseError> {
+pub fn parse_card_to_play_request(s: &str) -> Result<hearts_ai::CardToPlayDirectRequest, ParseError> {
     let req: JsonCardToPlayRequest = serde_json::from_str(s)?;
     return Ok(req.to_request()?);
 }

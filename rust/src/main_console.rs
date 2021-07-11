@@ -81,7 +81,7 @@ fn main() {
 
     while !round.is_over() {
         let ai_card = hearts_ai::choose_card(
-            &hearts_ai::CardToPlayRequest::from_round(&round),
+            &round,
             &ai_strat,
             &mut rng,
         );

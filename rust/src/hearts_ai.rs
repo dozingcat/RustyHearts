@@ -21,7 +21,24 @@ pub enum CardToPlayStrategy {
     MonteCarloMixedRandomAvoidPoints(f64, MonteCarloParams),
 }
 
-pub struct CardToPlayRequest {
+// Interface for the inputs used to choose a card to play. CardToPlayDirectRequest is a struct
+// that contains these inputs directly, and hearts::Round implements the interface as well.
+// This allows passing Rounds to the card choosing functions without having to copy their fields
+// to a separate request object, which improves performance around 2x in main_ai_rounds.
+pub trait ChooseCardToPlayRequest {
+    fn rules(&self) -> &hearts::RuleSet;
+    fn scores_before_round(&self) -> &Vec<i32>;
+    fn hand(&self) -> &Vec<Card>;
+    fn prev_tricks(&self) -> &Vec<hearts::Trick>;
+    fn current_trick(&self) -> &hearts::TrickInProgress;
+    fn pass_direction(&self) -> u32;
+    fn passed_cards(&self) -> &Vec<Card>;
+    fn received_cards(&self) -> &Vec<Card>;
+    fn current_player_index(&self) -> usize;
+    fn legal_plays(&self) -> Vec<Card>;
+}
+
+pub struct CardToPlayDirectRequest {
     pub rules: hearts::RuleSet,
     pub scores_before_round: Vec<i32>,
     pub hand: Vec<Card>,
@@ -30,6 +47,48 @@ pub struct CardToPlayRequest {
     pub pass_direction: u32,
     pub passed_cards: Vec<Card>,
     pub received_cards: Vec<Card>,
+}
+
+impl CardToPlayDirectRequest {
+    pub fn legal_plays(&self) -> Vec<Card> {
+        return hearts::legal_plays(
+            &self.hand,
+            &self.current_trick,
+            &self.prev_tricks,
+            &self.rules,
+        );
+    }
+
+    pub fn current_player_index(&self) -> usize {
+        return (self.current_trick.leader + self.current_trick.cards.len())
+            % self.rules.num_players;
+    }
+}
+
+impl ChooseCardToPlayRequest for CardToPlayDirectRequest {
+    fn rules(&self) -> &hearts::RuleSet {&self.rules}
+    fn scores_before_round(&self) -> &Vec<i32> {&self.scores_before_round}
+    fn hand(&self) -> &Vec<Card> {&self.hand}
+    fn prev_tricks(&self) -> &Vec<hearts::Trick> {&self.prev_tricks}
+    fn current_trick(&self) -> &hearts::TrickInProgress {&self.current_trick}
+    fn pass_direction(&self) -> u32 {self.pass_direction}
+    fn passed_cards(&self) -> &Vec<Card> {&self.passed_cards}
+    fn received_cards(&self) -> &Vec<Card> {&self.received_cards}
+    fn current_player_index(&self) -> usize {self.current_player_index()}
+    fn legal_plays(&self) -> Vec<Card> {self.legal_plays()}
+}
+
+impl ChooseCardToPlayRequest for hearts::Round {
+    fn rules(&self) -> &hearts::RuleSet {&self.rules}
+    fn scores_before_round(&self) -> &Vec<i32> {&self.initial_scores}
+    fn hand(&self) -> &Vec<Card> {&self.current_player().hand}
+    fn prev_tricks(&self) -> &Vec<hearts::Trick> {&self.prev_tricks}
+    fn current_trick(&self) -> &hearts::TrickInProgress {&self.current_trick}
+    fn pass_direction(&self) -> u32 {self.pass_direction}
+    fn passed_cards(&self) -> &Vec<Card> {&self.current_player().passed_cards}
+    fn received_cards(&self) -> &Vec<Card> {&self.current_player().received_cards}
+    fn current_player_index(&self) -> usize {self.current_player_index()}
+    fn legal_plays(&self) -> Vec<Card> {self.legal_plays()}
 }
 
 pub struct CardsToPassRequest {
@@ -137,35 +196,6 @@ pub fn choose_cards_to_pass(req: &CardsToPassRequest) -> Vec<Card> {
     return sorted_cards[0..(req.num_cards as usize)].to_vec();
 }
 
-impl CardToPlayRequest {
-    pub fn from_round(round: &hearts::Round) -> CardToPlayRequest {
-        return CardToPlayRequest {
-            rules: round.rules.clone(),
-            scores_before_round: round.initial_scores.clone(),
-            hand: round.current_player().hand.clone(),
-            prev_tricks: round.prev_tricks.clone(),
-            current_trick: round.current_trick.clone(),
-            pass_direction: round.pass_direction,
-            passed_cards: round.current_player().passed_cards.clone(),
-            received_cards: round.current_player().received_cards.clone(),
-        };
-    }
-
-    pub fn current_player_index(&self) -> usize {
-        return (self.current_trick.leader + self.current_trick.cards.len())
-            % self.rules.num_players;
-    }
-
-    pub fn legal_plays(&self) -> Vec<Card> {
-        return hearts::legal_plays(
-            &self.hand,
-            &self.current_trick,
-            &self.prev_tricks,
-            &self.rules,
-        );
-    }
-}
-
 fn is_nonrecursive(strategy: &CardToPlayStrategy) -> bool {
     return match strategy {
         CardToPlayStrategy::Random => true,
@@ -176,7 +206,7 @@ fn is_nonrecursive(strategy: &CardToPlayStrategy) -> bool {
 }
 
 fn choose_card_nonrecursive(
-    req: &CardToPlayRequest,
+    req: &impl ChooseCardToPlayRequest,
     strategy: &CardToPlayStrategy,
     mut rng: impl Rng,
 ) -> Card {
@@ -184,7 +214,7 @@ fn choose_card_nonrecursive(
         CardToPlayStrategy::Random => choose_card_random(req, rng),
         CardToPlayStrategy::AvoidPoints => choose_card_avoid_points(req, rng),
         CardToPlayStrategy::MixedRandomAvoidPoints(p_random) => {
-            if rng.gen_range(0.0_f64, 1.0_f64) < *p_random {
+            if rng.gen_range(0.0_f64..1.0_f64) < *p_random {
                 choose_card_random(req, rng)
             } else {
                 choose_card_avoid_points(req, rng)
@@ -195,7 +225,7 @@ fn choose_card_nonrecursive(
 }
 
 pub fn choose_card(
-    req: &CardToPlayRequest,
+    req: &impl ChooseCardToPlayRequest,
     strategy: &CardToPlayStrategy,
     mut rng: impl Rng,
 ) -> Card {
@@ -224,12 +254,12 @@ pub fn choose_card(
     }
 }
 
-pub fn choose_card_random(req: &CardToPlayRequest, mut rng: impl Rng) -> Card {
+pub fn choose_card_random(req: &impl ChooseCardToPlayRequest, mut rng: impl Rng) -> Card {
     let legal_plays = req.legal_plays();
     return *legal_plays.choose(&mut rng).unwrap();
 }
 
-pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> Card {
+pub fn choose_card_avoid_points(req: &impl ChooseCardToPlayRequest, mut rng: impl Rng) -> Card {
     let legal_plays = req.legal_plays();
     assert!(legal_plays.len() > 0);
     if legal_plays.len() == 1 {
@@ -243,7 +273,7 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
     // If last in a trick and following suit, play high if there are no points.
     // Otherwise play low if following suit, discard highest otherwise (favoring QS).
     // TODO: Favor leading spades if QS hasn't been played and it's safe?
-    let trick = &req.current_trick;
+    let trick = &req.current_trick();
     if trick.cards.is_empty() {
         let suit = *random_from_set(&legal_suits, &mut rng);
         let ranks = ranks_for_suit(&legal_plays, suit);
@@ -253,11 +283,11 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
     let trick_suit = trick.cards.first().unwrap().suit;
     let is_following_suit = legal_suits.contains(&trick_suit);
     let has_qs = legal_plays.contains(&hearts::QUEEN_OF_SPADES);
-    let has_jd = req.rules.jd_minus_10 && legal_plays.contains(&hearts::JACK_OF_DIAMONDS);
+    let has_jd = req.rules().jd_minus_10 && legal_plays.contains(&hearts::JACK_OF_DIAMONDS);
     if is_following_suit {
         assert!(legal_suits.len() == 1);
         // Play high on first trick if no points allowed.
-        if req.prev_tricks.is_empty() && !req.rules.points_on_first_trick {
+        if req.prev_tricks().is_empty() && !req.rules().points_on_first_trick {
             return *legal_plays
                 .iter()
                 .filter(|c| **c != hearts::QUEEN_OF_SPADES)
@@ -269,10 +299,10 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
         if has_qs && high_card.rank > Rank::QUEEN {
             return hearts::QUEEN_OF_SPADES;
         }
-        let is_last_play = trick.cards.len() == req.rules.num_players - 1;
+        let is_last_play = trick.cards.len() == req.rules().num_players - 1;
         // TODO: Play JD if we know it will win.
         if is_last_play {
-            let trick_points = hearts::points_for_cards(&trick.cards, &req.rules);
+            let trick_points = hearts::points_for_cards(&trick.cards, &req.rules());
             // Win with JD if possible (and no QS).
             if has_jd && trick_points < 10 && high_card.rank < Rank::JACK {
                 return hearts::JACK_OF_DIAMONDS;
@@ -339,6 +369,10 @@ pub fn choose_card_avoid_points(req: &CardToPlayRequest, mut rng: impl Rng) -> C
     }
 }
 
+fn get_card_to_play(round: &hearts::Round, strategy: &CardToPlayStrategy, mut rng: impl Rng) -> Card {
+    return choose_card_nonrecursive(round, strategy, &mut rng);
+}
+
 fn do_rollout(round: &mut hearts::Round, strategy: &CardToPlayStrategy, mut rng: impl Rng) {
     /*
     println!("Rollout:");
@@ -357,8 +391,7 @@ fn do_rollout(round: &mut hearts::Round, strategy: &CardToPlayStrategy, mut rng:
         assert!(legal_plays.len() > 0);
         // We have to split the strategies into recursive and nonrecursive, otherwise the compiler
         // tries to infinitely recurse.
-        let card_to_play =
-            choose_card_nonrecursive(&CardToPlayRequest::from_round(&round), strategy, &mut rng);
+        let card_to_play = get_card_to_play(round, strategy, &mut rng);
         round.play_card(&card_to_play);
     }
 }
@@ -375,10 +408,10 @@ fn max_index<T: PartialOrd>(vals: &[T]) -> usize {
     return max_index;
 }
 
-fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionRequest {
-    let num_players = req.rules.num_players;
+fn make_card_distribution_req(req: &impl ChooseCardToPlayRequest) -> CardDistributionRequest {
+    let num_players = req.rules().num_players;
     let mut seen_cards: HashSet<Card> = HashSet::new();
-    for &c in req.hand.iter() {
+    for &c in req.hand().iter() {
         seen_cards.insert(c);
     }
     let mut voided_suits: Vec<HashSet<Suit>> = Vec::new();
@@ -404,31 +437,31 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
                 voided_suits[(leader + i) % num_players].insert(trick_suit);
             }
             if c.suit == Suit::Hearts
-                || (req.rules.queen_breaks_hearts && c == hearts::QUEEN_OF_SPADES)
+                || (req.rules().queen_breaks_hearts && c == hearts::QUEEN_OF_SPADES)
             {
                 hearts_broken = true;
             }
         }
     };
 
-    for t in req.prev_tricks.iter() {
+    for t in req.prev_tricks().iter() {
         process_trick(&t.cards, t.leader);
     }
-    if !req.current_trick.cards.is_empty() {
-        process_trick(&req.current_trick.cards, req.current_trick.leader);
+    if !req.current_trick().cards.is_empty() {
+        process_trick(&req.current_trick().cards, req.current_trick().leader);
     }
 
     let mut cards_to_assign: Vec<Card> = Vec::new();
     for_each_card(|c| {
-        if !req.rules.removed_cards.contains(c) && !seen_cards.contains(c) {
+        if !req.rules().removed_cards.contains(c) && !seen_cards.contains(c) {
             cards_to_assign.push(*c);
         }
     });
     let mut counts: Vec<usize> = Vec::new();
-    let base_count: usize = 13 - req.prev_tricks.len();
+    let base_count: usize = 13 - req.prev_tricks().len();
     counts.resize(num_players, base_count);
-    for i in 0..req.current_trick.cards.len() {
-        let pi = (req.current_trick.leader + i) % num_players;
+    for i in 0..req.current_trick().cards.len() {
+        let pi = (req.current_trick().leader + i) % num_players;
         counts[pi] -= 1;
     }
     counts[req.current_player_index()] = 0;
@@ -440,9 +473,9 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
             fixed_cards: HashSet::new(),
         });
     }
-    if req.passed_cards.len() > 0 {
-        let passed_to = (req.current_player_index() + (req.pass_direction as usize)) % num_players;
-        for c in req.passed_cards.iter() {
+    if req.passed_cards().len() > 0 {
+        let passed_to = (req.current_player_index() + (req.pass_direction() as usize)) % num_players;
+        for c in req.passed_cards().iter() {
             constraints[passed_to].fixed_cards.insert(*c);
         }
     }
@@ -453,7 +486,7 @@ fn make_card_distribution_req(req: &CardToPlayRequest) -> CardDistributionReques
 }
 
 fn possible_round(
-    cc_req: &CardToPlayRequest,
+    cc_req: &impl ChooseCardToPlayRequest,
     dist_req: &CardDistributionRequest,
     rng: impl Rng,
 ) -> Option<hearts::Round> {
@@ -464,20 +497,20 @@ fn possible_round(
     let dist = maybe_dist.unwrap();
     let cur_player = cc_req.current_player_index();
     let mut result_players: Vec<hearts::Player> = Vec::new();
-    for i in 0..cc_req.rules.num_players {
+    for i in 0..cc_req.rules().num_players {
         let h = (if i == cur_player {
-            &cc_req.hand
+            &cc_req.hand()
         } else {
             &dist[i]
         });
         result_players.push(hearts::Player::new(h));
     }
     return Some(hearts::Round {
-        rules: cc_req.rules.clone(),
+        rules: cc_req.rules().clone(),
         players: result_players,
-        initial_scores: cc_req.scores_before_round.clone(),
-        current_trick: cc_req.current_trick.clone(),
-        prev_tricks: cc_req.prev_tricks.clone(),
+        initial_scores: cc_req.scores_before_round().clone(),
+        current_trick: cc_req.current_trick().clone(),
+        prev_tricks: cc_req.prev_tricks().clone(),
         status: hearts::RoundStatus::Playing,
         // Ignore passed cards.
         pass_direction: 0,
@@ -486,7 +519,7 @@ fn possible_round(
 }
 
 pub fn choose_card_monte_carlo(
-    req: &CardToPlayRequest,
+    req: &impl ChooseCardToPlayRequest,
     mc_params: MonteCarloParams,
     rollout_strategy: &CardToPlayStrategy,
     mut rng: impl Rng,
@@ -508,7 +541,7 @@ pub fn choose_card_monte_carlo(
     println!("");
     */
 
-    let dist_req = make_card_distribution_req(&req);
+    let dist_req = make_card_distribution_req(req);
     for _s in 0..mc_params.num_hands {
         let maybe_hypo_round = possible_round(req, &dist_req, &mut rng);
         if maybe_hypo_round.is_none() {
@@ -524,12 +557,12 @@ pub fn choose_card_monte_carlo(
                 let mut rh = hypo_copy.clone();
                 do_rollout(&mut rh, &rollout_strategy, &mut rng);
                 let round_points = rh.points_taken();
-                let mut scores_after_round = req.scores_before_round.clone();
-                for p in 0..req.rules.num_players {
+                let mut scores_after_round = req.scores_before_round().clone();
+                for p in 0..req.rules().num_players {
                     scores_after_round[p] += round_points[p];
                 }
                 equity_per_play[ci] +=
-                    match_equity_for_scores(&scores_after_round, req.rules.point_limit, pnum);
+                    match_equity_for_scores(&scores_after_round, req.rules().point_limit, pnum);
                 // println!("Scores: {:?}", &scores_after_round);
             }
         }
