@@ -9,7 +9,7 @@ use std::slice;
 use rand::thread_rng;
 
 use hearts_ai::MonteCarloParams;
-use hearts_ai::{CardToPlayRequest, CardToPlayStrategy, CardsToPassRequest};
+use hearts_ai::{CardToPlayDirectRequest, CardToPlayStrategy, CardsToPassRequest};
 
 /* Example: paste to stdin:
 {
@@ -49,7 +49,7 @@ fn cards_to_pass_req_from_json(s: *const u8, len: u32) -> CardsToPassRequest {
     return hearts_json::parse_cards_to_pass_request(&r_str).unwrap();
 }
 
-fn card_to_play_req_from_json(s: *const u8, len: u32) -> CardToPlayRequest {
+fn card_to_play_req_from_json(s: *const u8, len: u32) -> CardToPlayDirectRequest {
     let r_str = string_from_ptr(s, len);
     return hearts_json::parse_card_to_play_request(&r_str).unwrap();
 }

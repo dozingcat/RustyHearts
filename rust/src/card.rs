@@ -211,7 +211,7 @@ pub fn ranks_for_suit(cards: &[Card], suit: Suit) -> Vec<Rank> {
 }
 
 pub fn random_from_set<T>(items: &HashSet<T>, mut rng: impl Rng) -> &T {
-    let n: usize = rng.gen_range(0, items.len());
+    let n: usize = rng.gen_range(0..items.len());
     let mut ci = items.iter();
     for _i in 0..n {
         ci.next();
