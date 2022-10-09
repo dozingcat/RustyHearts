@@ -1,4 +1,7 @@
 # RustyHearts
+
+NOTE: This project is not maintained. Its replacement is [Cards With Cats](https://github.com/dozingcat/CardsWithCats), which is a Flutter app with similar AI logic, more features, and a much more convenient development and build process. This was an experiment to see if it's possible to create an Android app with Rust on the back end and Python on the front end; the answer is "sort of, but you probably shouldn't". 
+
 Hearts card game with AI in Rust and front end in Python.
 
 To play a round from the command line:
